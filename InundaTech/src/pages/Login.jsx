@@ -37,7 +37,6 @@ export const Login = ({ onLogin }) => {
             InundaTech
           </h1>
           <p className="text-gray-600">Sistema de Monitoreo de Inundaciones</p>
-          <p className="text-red-600 font-bold">Si ves este texto rojo, Tailwind funciona</p>
 
         </header>
 
