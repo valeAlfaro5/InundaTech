@@ -1,0 +1,36 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Archivos de datos
+data/
+!data/README.md  # Mantén solo un readme en la carpeta de datos
+
+# Credenciales y configuraciones privadas
+*.json
+*.key
+*.env
+
+# Archivos temporales y cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+
+# Configuración de VS Code
+.vscode/
+
+# Salidas de notebooks
+.ipynb_checkpoints/
+
+# Modelos entrenados (pesados)
+*.h5
+*.pth
+*.pt
+*.ckpt
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
