@@ -34,3 +34,6 @@ __pycache__/
 # Archivos de sistema
 .DS_Store
 Thumbs.db
+
+# Carpeta con un monton de cosas no se
+/InundaTech
