@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Droplets, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { FaHouseFloodWaterCircleArrowRight } from "react-icons/fa6";
 
 export const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -30,7 +31,7 @@ export const Login = ({ onLogin }) => {
         <header className="text-center space-y-4 mb-6">
           <div className="flex justify-center mb-4">
             <div className="p-3 bg-blue-400 rounded-full shadow-lg animate-pulse-glow">
-              <Droplets className="h-8 w-8 text-white" />
+              <FaHouseFloodWaterCircleArrowRight className="h-8 w-8 text-white" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-400">
