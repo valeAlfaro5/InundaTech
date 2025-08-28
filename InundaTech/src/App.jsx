@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Layout } from './pages/Layout';
 import  AlertsPage from './pages/AlertsPage';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { RegisterForm } from './pages/RegisterForm';
 // import { AuthProvider } from './components/AuthContext';
 // import ProtectedRoute from './components/ProtectedRoute';
 
@@ -16,6 +17,8 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Login/>}/>
+          <Route path="/register" element={<RegisterForm/>}/>
+          
            <Route path='/' element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="/alertas" element={<AlertsPage/>}/>

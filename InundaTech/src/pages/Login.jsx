@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Droplets, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Eye, EyeOff } from 'lucide-react';
 import { FaHouseFloodWaterCircleArrowRight } from "react-icons/fa6";
 import { useNavigate } from 'react-router-dom';
 
@@ -15,9 +15,8 @@ export const Login = () => {
     setIsLoading(true);
 
     setTimeout(() => {
-      // Aquí puedes validar las credenciales reales
       if (username === 'admin' && password === 'admin123') {
-        navigate('/dashboard'); // Ir al Dashboard
+        navigate('/dashboard');
       } else {
         alert('Usuario o contraseña incorrectos');
       }
@@ -105,8 +104,16 @@ export const Login = () => {
             )}
           </button>
 
+          {/* Enlace al registro */}
           <p className="text-center text-sm text-gray-500">
-            Demo: usuario: <code className="bg-gray-200 px-1 rounded">admin</code> | contraseña: <code className="bg-gray-200 px-1 rounded">admin123</code>
+            ¿No tienes cuenta?{" "}
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="text-blue-600 hover:underline"
+            >
+              Regístrate aquí
+            </button>
           </p>
         </form>
       </div>

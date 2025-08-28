@@ -79,8 +79,16 @@ const AlertsPage = () => {
         description: err.message,
         variant: "destructive"
       });
+       setTitle("");
+      setMessage("");
+      setSeverity("medium");
+      setMethod("email");
     } finally {
       setIsLoading(false);
+      setTitle("");
+      setMessage("");
+      setSeverity("medium");
+      setMethod("email");
     }
   };
 
@@ -127,7 +135,6 @@ const AlertsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Formulario */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
@@ -149,7 +156,6 @@ const AlertsPage = () => {
               />
             </div>
 
-            {/* Severidad */}
             <div>
               <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
               <select
@@ -164,7 +170,6 @@ const AlertsPage = () => {
               </select>
             </div>
 
-            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
@@ -176,7 +181,6 @@ const AlertsPage = () => {
               />
             </div>
 
-            {/* Selector método 👇 */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Método de Envío</label>
               <div className="flex items-center space-x-6">
@@ -204,7 +208,7 @@ const AlertsPage = () => {
               </div>
             </div>
 
-            {/* Vista previa */}
+            {/* Vista previa
             <div className="border rounded-md p-3 bg-blue-50">
               <div className="flex items-center gap-2 mb-1">
                 <AlertTriangle className="w-4 h-4 text-blue-600" />
@@ -223,9 +227,8 @@ const AlertsPage = () => {
                   "Completa el título y mensaje para ver la vista previa"
                 )}
               </p>
-            </div>
+            </div> */}
 
-            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
@@ -245,8 +248,7 @@ const AlertsPage = () => {
             </button>
           </div>
         </div>
-
-        {/* Historial */}
+        
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas
