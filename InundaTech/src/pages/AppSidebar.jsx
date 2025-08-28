@@ -5,7 +5,7 @@ import { LuMessageSquarePlus } from "react-icons/lu";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  {title: "Mensajeria", url: "/messages", icon: LuMessageSquarePlus},
+  {title: "Mensajeria", url: "/alertas", icon: LuMessageSquarePlus},
 ];
 
 export default function AppSidebar({ onLogout }) {

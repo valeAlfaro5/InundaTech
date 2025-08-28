@@ -1,19 +1,26 @@
 import { useState } from 'react';
 import { Droplets, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { FaHouseFloodWaterCircleArrowRight } from "react-icons/fa6";
+import { useNavigate } from 'react-router-dom';
 
-export const Login = ({ onLogin }) => {
+export const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
     setTimeout(() => {
-      onLogin(username, password);
+      // Aquí puedes validar las credenciales reales
+      if (username === 'admin' && password === 'admin123') {
+        navigate('/dashboard'); // Ir al Dashboard
+      } else {
+        alert('Usuario o contraseña incorrectos');
+      }
       setIsLoading(false);
     }, 1500);
   };
@@ -38,7 +45,6 @@ export const Login = ({ onLogin }) => {
             InundaTech
           </h1>
           <p className="text-gray-600">Sistema de Monitoreo de Inundaciones</p>
-
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-6">
