@@ -1,15 +1,16 @@
 import React, { useState } from "react";
-import { Send, AlertTriangle, Clock, Users, Bell } from "lucide-react";
+import { Send, AlertTriangle, Clock, Users, Bell, MessageSquare, Mail } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
 
 const AlertsPage = () => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [severity, setSeverity] = useState("medium");
+  const [method, setMethod] = useState("email"); // 👈 NUEVO: SMS o Email
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Mock data para historial de alertas
+  // Mock data para historial
   const [alertHistory] = useState([
     {
       id: "1",
@@ -52,25 +53,26 @@ const AlertsPage = () => {
     setIsLoading(true);
 
     try {
-      // Construir mensaje con nivel de severidad en bold
+      // Construir mensaje con nivel de severidad
       const fullMessage = `${message}\n\nNivel de severidad: **${getSeverityText(severity)}**`;
 
       const response = await fetch("http://localhost:3000/sendAlert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, message: fullMessage }) // enviamos el mensaje completo
+        body: JSON.stringify({ title, message: fullMessage, method }) 
       });
 
       if (!response.ok) throw new Error("Error enviando alerta");
 
       toast({
         title: "Alerta enviada",
-        description: `Correo enviado a todos los usuarios`
+        description: `Notificación enviada por ${method.toLowerCase()}`
       });
 
       setTitle("");
       setMessage("");
       setSeverity("medium");
+      setMethod("email");
     } catch (err) {
       toast({
         title: "Error",
@@ -81,7 +83,6 @@ const AlertsPage = () => {
       setIsLoading(false);
     }
   };
-
 
   const getSeverityColor = severity => {
     switch (severity) {
@@ -120,7 +121,7 @@ const AlertsPage = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Centro de Alertas</h1>
           <p className="text-gray-600">
-            Envía notificaciones por correo a la comunidad sobre el estado de inundaciones
+            Envía notificaciones por correo o SMS a la comunidad sobre el estado de inundaciones
           </p>
         </div>
       </div>
@@ -132,16 +133,14 @@ const AlertsPage = () => {
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
           <p className="text-sm text-gray-500 mb-4">
-            Crea y envía notificaciones por correo a todos los usuarios registrados
+            Crea y envía notificaciones a todos los usuarios registrados
           </p>
 
           <div className="space-y-4">
+            {/* Título */}
             <div>
-              <label htmlFor="title" className="block text-sm font-medium mb-1">
-                Título de la Alerta
-              </label>
+              <label className="block text-sm font-medium mb-1">Título</label>
               <input
-                id="title"
                 type="text"
                 placeholder="Ej: Nivel crítico en Río Magdalena"
                 value={title}
@@ -150,12 +149,10 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Severidad */}
             <div>
-              <label htmlFor="severity" className="block text-sm font-medium mb-1">
-                Nivel de Severidad
-              </label>
+              <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
               <select
-                id="severity"
                 value={severity}
                 onChange={e => setSeverity(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md text-sm"
@@ -167,12 +164,10 @@ const AlertsPage = () => {
               </select>
             </div>
 
+            {/* Mensaje */}
             <div>
-              <label htmlFor="message" className="block text-sm font-medium mb-1">
-                Mensaje de la Alerta
-              </label>
+              <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
-                id="message"
                 rows={4}
                 placeholder="Escribe aquí el mensaje detallado de la alerta..."
                 value={message}
@@ -181,6 +176,35 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Selector método 👇 */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Método de Envío</label>
+              <div className="flex items-center space-x-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="sms"
+                    checked={method === "sms"}
+                    onChange={e => setMethod(e.target.value)}
+                  />
+                  <MessageSquare className="w-4 h-4" />
+                  SMS
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="email"
+                    checked={method === "email"}
+                    onChange={e => setMethod(e.target.value)}
+                  />
+                  <Mail className="w-4 h-4" />
+                  Email
+                </label>
+              </div>
+            </div>
+
+            {/* Vista previa */}
             <div className="border rounded-md p-3 bg-blue-50">
               <div className="flex items-center gap-2 mb-1">
                 <AlertTriangle className="w-4 h-4 text-blue-600" />
@@ -201,6 +225,7 @@ const AlertsPage = () => {
               </p>
             </div>
 
+            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
