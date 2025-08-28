@@ -128,7 +128,7 @@ const AlertsPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Formulario */}
-        <div className="border rounded-2xl shadow-sm p-4 hover:shadow-md transition">
+        <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
@@ -247,7 +247,7 @@ const AlertsPage = () => {
         </div>
 
         {/* Historial */}
-        <div className="border rounded-2xl shadow-sm p-4 hover:shadow-md transition">
+        <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas
           </h2>

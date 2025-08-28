@@ -3,9 +3,8 @@ import cors from "cors";
 import nodemailer from "nodemailer";
 import process from "process";
 import dotenv from "dotenv";
-import twilio from "twilio";  // 👈 importar twilio
+import twilio from "twilio";  
 
-// Cargar variables de entorno desde .env
 dotenv.config();
 
 const app = express();
@@ -19,7 +18,7 @@ app.use(express.json());
 // Array simulado de usuarios con email y teléfono
 const users = [
   { id: 1, email: "valeriasalfaro@gmail.com", phone: "+50497919841" },
-  { id: 2, email: "valeriaalfaro@unitec.edu.com", phone: "+50494189011" }
+  { id: 2, email: "valeriaalfaro@unitec.edu", phone: "+50494189011" }
 ];
 
 console.log("EMAIL_USER:", process.env.EMAIL_USER ? "CARGADO" : "NO DEFINIDO");
@@ -36,9 +35,8 @@ const transporter = nodemailer.createTransport({
 });
 
 const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
-const TWILIO_PHONE = process.env.TWILIO_PHONE; // número de Twilio (ej: +123456789)
+const TWILIO_PHONE = process.env.TWILIO_PHONE; 
 
-// Endpoint para enviar alerta (correo o SMS, según selección)
 app.post("/sendAlert", async (req, res) => {
   const { title, message, method } = req.body || {}; 
 
@@ -47,13 +45,12 @@ app.post("/sendAlert", async (req, res) => {
     return res.status(400).json({ message: "Faltan datos de la alerta (title, message, method)" });
   }
 
-  console.log(`📩 Método: ${method} | Enviando alerta: ${title} - ${message}`);
+  console.log(`Método: ${method} | Enviando alerta: ${title} - ${message}`);
 
   try {
     let results = [];
 
     if (method === "email") {
-      // --- Enviar correos ---
       results = await Promise.all(users.map(user => {
         return transporter.sendMail({
           from: `"InundaTech" <${process.env.EMAIL_USER}>`,
@@ -65,7 +62,6 @@ app.post("/sendAlert", async (req, res) => {
     } 
     
     else if (method === "sms") {
-      // --- Enviar SMS ---
       results = await Promise.all(users.map(user => {
         if (!user.phone) return null; // si no tiene teléfono, saltar
         return client.messages.create({
@@ -80,22 +76,21 @@ app.post("/sendAlert", async (req, res) => {
       return res.status(400).json({ message: "Método inválido. Use 'email' o 'sms'." });
     }
 
-    console.log("✅ Alertas enviadas correctamente:", results);
+    console.log("Alertas enviadas correctamente:", results);
     res.json({ message: `Alertas enviadas correctamente vía ${method}` });
 
   } catch (err) {
-    console.error("❌ Error enviando alertas:", err);
+    console.error("Error enviando alertas:", err);
     res.status(500).json({ message: "Error enviando alertas", error: err });
   }
 });
 
-// Manejo de errores global
 process.on("uncaughtException", (err) => {
-  console.error("❌ Error no capturado:", err);
+  console.error("Error no capturado:", err);
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("❌ Promesa rechazada:", reason);
+  console.error("Promesa rechazada:", reason);
 });
 
 // Iniciar servidor
