@@ -1,44 +1,37 @@
-import React, { useState } from "react";
-import { Send, AlertTriangle, Clock, Users, Bell, MessageSquare, Mail } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Send,
+  Clock,
+  Users,
+  Bell,
+  MessageSquare,
+  Mail
+} from "lucide-react";
 import { useToast } from "../hooks/use-toast";
 
 const AlertsPage = () => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [severity, setSeverity] = useState("medium");
-  const [method, setMethod] = useState("email"); // 👈 NUEVO: SMS o Email
+  const [method, setMethod] = useState("email");
   const [isLoading, setIsLoading] = useState(false);
+  const [alertHistory, setAlertHistory] = useState([]); // 👈 viene del backend
   const { toast } = useToast();
 
-  // Mock data para historial
-  const [alertHistory] = useState([
-    {
-      id: "1",
-      title: "Nivel Alto en Río Magdalena",
-      message:
-        "El nivel del río ha alcanzado 8.5m. Se recomienda evacuación preventiva en zonas bajas.",
-      timestamp: new Date("2024-01-15T10:30:00"),
-      recipients: 1250,
-      severity: "high"
-    },
-    {
-      id: "2",
-      title: "Alerta Meteorológica",
-      message:
-        "Se esperan lluvias intensas en las próximas 6 horas. Manténganse alerta.",
-      timestamp: new Date("2024-01-15T08:15:00"),
-      recipients: 890,
-      severity: "medium"
-    },
-    {
-      id: "3",
-      title: "Actualización de Niveles",
-      message: "Los niveles del río han disminuido. Situación bajo control.",
-      timestamp: new Date("2024-01-14T16:45:00"),
-      recipients: 750,
-      severity: "low"
+  // 🔹 Cargar historial desde el backend
+  const fetchAlerts = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/alerts");
+      const data = await res.json();
+      setAlertHistory(data);
+    } catch (err) {
+      console.error("❌ Error cargando historial:", err);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
 
   const handleSendAlert = async () => {
     if (!title.trim() || !message.trim()) {
@@ -53,13 +46,12 @@ const AlertsPage = () => {
     setIsLoading(true);
 
     try {
-      // Construir mensaje con nivel de severidad
       const fullMessage = `${message}\n\nNivel de severidad: **${getSeverityText(severity)}**`;
 
       const response = await fetch("http://localhost:3000/sendAlert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, message: fullMessage, method }) 
+        body: JSON.stringify({ title, message: fullMessage, method, severity })
       });
 
       if (!response.ok) throw new Error("Error enviando alerta");
@@ -73,22 +65,17 @@ const AlertsPage = () => {
       setMessage("");
       setSeverity("medium");
       setMethod("email");
+
+      // 🔹 Refrescar historial
+      fetchAlerts();
     } catch (err) {
       toast({
         title: "Error",
         description: err.message,
         variant: "destructive"
       });
-       setTitle("");
-      setMessage("");
-      setSeverity("medium");
-      setMethod("email");
     } finally {
       setIsLoading(false);
-      setTitle("");
-      setMessage("");
-      setSeverity("medium");
-      setMethod("email");
     }
   };
 
@@ -135,14 +122,11 @@ const AlertsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 📌 Formulario Nueva Alerta */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Crea y envía notificaciones a todos los usuarios registrados
-          </p>
-
           <div className="space-y-4">
             {/* Título */}
             <div>
@@ -156,6 +140,7 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Severidad */}
             <div>
               <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
               <select
@@ -170,6 +155,7 @@ const AlertsPage = () => {
               </select>
             </div>
 
+            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
@@ -181,6 +167,7 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Método de envío */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Método de Envío</label>
               <div className="flex items-center space-x-6">
@@ -208,27 +195,7 @@ const AlertsPage = () => {
               </div>
             </div>
 
-            {/* Vista previa
-            <div className="border rounded-md p-3 bg-blue-50">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="w-4 h-4 text-blue-600" />
-                <span className="font-semibold text-blue-800 text-sm">
-                  Vista Previa
-                </span>
-              </div>
-              <p className="text-blue-700 text-sm">
-                {title && message ? (
-                  <>
-                    <strong>{title}</strong>
-                    <br />
-                    {message}
-                  </>
-                ) : (
-                  "Completa el título y mensaje para ver la vista previa"
-                )}
-              </p>
-            </div> */}
-
+            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
@@ -248,7 +215,8 @@ const AlertsPage = () => {
             </button>
           </div>
         </div>
-        
+
+        {/* 📌 Historial de Alertas */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas
@@ -258,31 +226,37 @@ const AlertsPage = () => {
           </p>
 
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {alertHistory.map(alert => (
-              <div
-                key={alert.id}
-                className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900">{alert.title}</h3>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(
-                      alert.severity
-                    )}`}
-                  >
-                    {getSeverityText(alert.severity)}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{alert.message}</p>
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {alert.recipients} usuarios
+            {alertHistory.length === 0 ? (
+              <p className="text-gray-500 text-sm">No hay alertas registradas</p>
+            ) : (
+              alertHistory.map(alert => (
+                <div
+                  key={alert.id}
+                  className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900">{alert.title}</h3>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(
+                        alert.severity
+                      )}`}
+                    >
+                      {getSeverityText(alert.severity)}
+                    </span>
                   </div>
-                  <span>{alert.timestamp.toLocaleString()}</span>
+                  <p className="text-sm text-gray-600 mb-3">{alert.message}</p>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {alert.recipients || "N/A"} usuarios
+                    </div>
+                    <span>
+                      {new Date(alert.timestamp).toLocaleString("es-ES")}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
