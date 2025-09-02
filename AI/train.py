@@ -49,6 +49,11 @@ def main():
     exclude = {"name","datetime","description","icon","stations","sunrise","sunset","preciptype","conditions","risk_next_day","precip_next_day"}
     numeric_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
 
+    (Path(args.out) / "feature_names.json").write_text(
+    json.dumps(numeric_cols, indent=2),
+    encoding="utf-8"
+)
+
     X_train, y_train = train_df[numeric_cols], train_df["risk_next_day"]
     X_test, y_test = test_df[numeric_cols], test_df["risk_next_day"]
 
