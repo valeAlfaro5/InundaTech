@@ -46,7 +46,7 @@ const TWILIO_PHONE = process.env.TWILIO_PHONE;
 const users = [
   { id: 1, email: "valeriasalfaro@gmail.com", phone: "+50497919841" },
   { id: 2, email: "valeriaalfaro@unitec.edu", phone: "+50494189011" },
-  { id: 3, email: "miguel.ardon@unitec.edu", phone: "" },
+  // { id: 3, email: "miguel.ardon@unitec.edu", phone: "" },
   {id: 4, email: "jorgefpaz011@gmail.com", phone: ""}
 ];
 

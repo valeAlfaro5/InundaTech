@@ -87,7 +87,7 @@ def predict_daily():
     data = res.json()
 
     results = []
-    for day in data.get("days", [])[:15]:  # solo los últimos 15 días
+    for day in data.get("days", [])[:15]: 
         payload = {
             "temp": day.get("temp"),
             "humidity": day.get("humidity"),

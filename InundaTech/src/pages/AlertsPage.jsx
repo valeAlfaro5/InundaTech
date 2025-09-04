@@ -15,10 +15,9 @@ const AlertsPage = () => {
   const [severity, setSeverity] = useState("medium");
   const [method, setMethod] = useState("email");
   const [isLoading, setIsLoading] = useState(false);
-  const [alertHistory, setAlertHistory] = useState([]); // 👈 viene del backend
+  const [alertHistory, setAlertHistory] = useState([]);
   const { toast } = useToast();
 
-  // 🔹 Cargar historial desde el backend
   const fetchAlerts = async () => {
     try {
       const res = await fetch("http://localhost:3000/alerts");
@@ -66,7 +65,7 @@ const AlertsPage = () => {
       setSeverity("medium");
       setMethod("email");
 
-      // 🔹 Refrescar historial
+      // Refrescar historial
       fetchAlerts();
     } catch (err) {
       toast({
@@ -122,13 +121,11 @@ const AlertsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 📌 Formulario Nueva Alerta */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
           <div className="space-y-4">
-            {/* Título */}
             <div>
               <label className="block text-sm font-medium mb-1">Título</label>
               <input
@@ -140,7 +137,6 @@ const AlertsPage = () => {
               />
             </div>
 
-            {/* Severidad */}
             <div>
               <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
               <select
@@ -155,7 +151,6 @@ const AlertsPage = () => {
               </select>
             </div>
 
-            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
@@ -167,7 +162,6 @@ const AlertsPage = () => {
               />
             </div>
 
-            {/* Método de envío */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Método de Envío</label>
               <div className="flex items-center space-x-6">
@@ -195,7 +189,6 @@ const AlertsPage = () => {
               </div>
             </div>
 
-            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
@@ -216,7 +209,6 @@ const AlertsPage = () => {
           </div>
         </div>
 
-        {/* 📌 Historial de Alertas */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas
