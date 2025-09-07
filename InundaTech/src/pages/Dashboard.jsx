@@ -1,18 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { 
-  Activity, TrendingUp, TrendingDown, Wind,SunMedium,Cloud,Eye, MapPin, Clock, Thermometer, Waves 
-} from 'lucide-react';
+  Clock, MapPin, Thermometer, Waves, CloudRain, Droplets, Umbrella, Eye
+} from "lucide-react";
+import { useToast } from "../hooks/use-toast";
 
 const getRiskColor = (p) => {
   if (p < 0.15) return { label: "Bajo", className: "bg-green-100 text-green-800" };
   if (p < 0.30) return { label: "Moderado", className: "bg-yellow-100 text-yellow-800" };
   if (p < 0.50) return { label: "Alto", className: "bg-orange-100 text-orange-800" };
-  return { label: "Muy Alto", className: "bg-red-100 text-red-800" };
+  return { label: "Crítico", className: "bg-red-100 text-red-800" };
+};
+
+const Mensaje = (p) => {
+  if (p < 0.15) return "Riesgo bajo de inundación. Condiciones normales.";
+  if (p < 0.30) return "Riesgo moderado de inundación. Mantente alerta.";
+  if (p < 0.50) return "Riesgo alto de inundación. Prepárate para posibles evacuaciones.";
+  return "Riesgo crítico de inundación. Toma medidas inmediatas para protegerte.";
 };
 
 export const Dashboard = () => {
   const [data, setData] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
+  const { toast } = useToast();
+  const isTesting = false; 
+
+  const handleSendAlert = async (riskProbability) => {
+    const riskMsg = Mensaje(riskProbability);
+    const riskLevel = getRiskColor(riskProbability).label;
+
+    const fullMessage = `${riskMsg}\n\nNivel de severidad: **${riskLevel}**`;
+
+    try {
+      const response = await fetch("http://localhost:3000/sendAlert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Alerta de Inundación - Riesgo ${(riskProbability*100).toFixed(1)}%`,
+          message: fullMessage,
+          method: "email",
+          severity: riskLevel
+        })
+      });
+
+      if (!response.ok) throw new Error("Error enviando alerta");
+
+      toast({
+        title: "Alerta enviada",
+        description: `Notificación enviada por email`
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive"
+      });
+    }
+  };
 
   const fetchRisk = async () => {
     try {
@@ -20,6 +63,12 @@ export const Dashboard = () => {
       const json = await res.json();
       setData(json);
       setLastUpdate(new Date().toLocaleTimeString());
+
+      const risk = getRiskColor(json.risk_probability);
+      if (isTesting || risk.label !== "Bajo") {
+        handleSendAlert(json.risk_probability);
+      }
+
     } catch (err) {
       console.error("Error fetching risk:", err);
     }
@@ -27,7 +76,7 @@ export const Dashboard = () => {
 
   useEffect(() => {
     fetchRisk();
-    const interval = setInterval(fetchRisk, 60000); // refresca cada 1 min
+    const interval = setInterval(fetchRisk, 60000); // refresca cada 1 minuto
     return () => clearInterval(interval);
   }, []);
 
@@ -53,7 +102,7 @@ export const Dashboard = () => {
           <div>
             <h3 className="text-3xl font-bold">Rio InundaTech</h3>
             <p className="flex items-center text-gray-600 text-lg mt-1">
-              <MapPin className="h-5 w-5 mr-1" /> {"San Pedro Sula, Cortés, Honduras"}
+              <MapPin className="h-5 w-5 mr-1" /> San Pedro Sula, Cortés, Honduras
             </p>
           </div>
           <span className={`px-4 py-2 rounded-full text-lg font-semibold ${risk.className}`}>
@@ -73,27 +122,27 @@ export const Dashboard = () => {
             <p className="text-gray-500 text-sm">Humedad</p>
           </div>
           <div className="bg-yellow-50 rounded-xl p-4">
-            <Clock className="mx-auto h-6 w-6 text-yellow-500" />
-            <p className="text-lg font-semibold">{data.datetime}</p>
-            <p className="text-gray-500 text-sm">Hora del dato</p>
+            <CloudRain className="mx-auto h-6 w-6 text-yellow-500" />
+            <p className="text-lg font-semibold">{data.features.precip}</p>
+            <p className="text-gray-500 text-sm">Precipitación</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-center">
           <div className="p-4 bg-pink-50 rounded-lg shadow-sm">
-            <Wind className="mx-auto h-6 w-6 text-pink-500" />
-            <p className="font-semibold">{data.features.windspeed} mph</p>
-            <p className="text-sm text-gray-500">Viento</p>
+            <Thermometer className="mx-auto h-6 w-6 text-pink-500" />
+            <p className="font-semibold">{data.features.feelslike} °C</p>
+            <p className="text-sm text-gray-500">Se siente como</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg shadow-sm">
-            <SunMedium className="mx-auto h-6 w-6 text-orange-500" />
-            <p className="font-semibold">{data.features.uvindex} mph</p>
-            <p className="text-sm text-gray-500">Rayos UV</p>
+            <Droplets className="mx-auto h-6 w-6 text-orange-500" />
+            <p className="font-semibold">{data.features.dew} °C</p>
+            <p className="text-sm text-gray-500">Punto de Rocío</p>
           </div>
           <div className="p-4 bg-teal-50 rounded-lg shadow-sm">
-            <Cloud className="mx-auto h-6 w-6 text-teal-500" />
-            <p className="font-semibold">{data.features.cloudcover}%</p>
-            <p className="text-sm text-gray-500">Nubosidad</p>
+            <Umbrella className="mx-auto h-6 w-6 text-teal-500" />
+            <p className="font-semibold">{data.features.condition}</p>
+            <p className="text-sm text-gray-500">Condición</p>
           </div>
           <div className="p-4 bg-purple-50 rounded-lg shadow-sm">
             <Eye className="mx-auto h-6 w-6 text-purple-500" />

@@ -46,9 +46,9 @@ def predict_realtime():
     today = data["days"][0]
     hour_data = next((h for h in today["hours"] if h["datetime"] == current_hour), today["hours"][0])
 
-    # arma el payload esperado
     payload = {
         "temp": hour_data.get("temp"),
+        "feelslike": hour_data.get("feelslike"),
         "humidity": hour_data.get("humidity"),
         "precip": hour_data.get("precip"),
         "windspeed": hour_data.get("windspeed"),
@@ -61,7 +61,9 @@ def predict_realtime():
         "dew": hour_data.get("dew"),
         "uvindex": hour_data.get("uvindex"),
         "precip_sum_3d": 0,  
-        "precip_max_3d": 0
+        "precip_max_3d": 0,
+        "condition": hour_data.get("conditions"),
+        "description": hour_data.get("description")
     }
 
     # predicción
@@ -81,7 +83,7 @@ def predict_realtime():
 
 @app.get("/predict_daily")
 def predict_daily():
-    url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=us&include=days&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
+    url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=metric&include=days&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
     res = requests.get(url)
     res.raise_for_status()
     data = res.json()

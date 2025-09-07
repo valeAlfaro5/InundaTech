@@ -1,17 +1,18 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Home, LogOut } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { Home, LogOut, TrendingUpDown} from "lucide-react";
 import { FaHouseFloodWaterCircleArrowRight } from "react-icons/fa6";
 import { LuMessageSquarePlus } from "react-icons/lu";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Mensajeria", url: "/alertas", icon: LuMessageSquarePlus },
+  { title: "Predicciones", url: "/history", icon: TrendingUpDown }
 ];
 
 export default function AppSidebar() {
-  const location = useLocation();
+  // const location = useLocation();
   const navigate = useNavigate();
-  const currentPath = location.pathname;
+  // const currentPath = location.pathname;
 
   const navClasses = (active) =>
     `flex items-center px-4 py-2 rounded-md transition-colors ${
@@ -26,7 +27,6 @@ export default function AppSidebar() {
 
   return (
     <aside className="flex flex-col w-64 h-screen bg-white shadow-md">
-      {/* Header */}
       <div className="flex items-center space-x-3 px-6 py-5 border-b border-gray-200">
         <div className="p-2 bg-blue-600 rounded-lg">
           <FaHouseFloodWaterCircleArrowRight className="h-6 w-6 text-white" />
