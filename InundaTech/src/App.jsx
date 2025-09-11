@@ -1,7 +1,7 @@
 import './App.css'
 import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Layout } from './pages/Layout';
+import Dashboard from './pages/Dashboard';
+import Layout  from './pages/Layout';
 import  AlertsPage from './pages/AlertsPage';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { RegisterForm } from './pages/RegisterForm';

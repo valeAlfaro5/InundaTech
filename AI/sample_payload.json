@@ -1,0 +1,20 @@
+{
+  "payload": {
+    "temp": 27.3,
+    "feelslike": 29.0,
+    "humidity": 84,
+    "precip": 5.2,
+    "windspeed": 12.1,
+    "windgust": 24.0,
+    "cloudcover": 70,
+    "visibility": 8.0,
+    "sealevelpressure": 1009.5,
+    "solarradiation": 210.0,
+    "solarenergy": 4.5,
+    "dew": 23.1,
+    "uvindex": 6,
+    "precip_sum_3d": 9.8,
+    "precip_max_3d": 6.7,
+    "condition": "Partly Cloudy"
+    }
+}
