@@ -11,6 +11,10 @@ import {
   Droplet
 } from "lucide-react"
 
+// IMPORTS AGREGADOS
+import ConnectionBadge from "../components/ConnectionBadge"
+import { useRTDBConnection } from "../hooks/useRTDBConnection"
+
 const getRiskColor = probability => {
   if (probability < 0.15)
     return { label: "Bajo", className: "bg-green-100 text-green-800 border-green-300" }
@@ -34,6 +38,9 @@ export default function Dashboard() {
   const [isConnected, setIsConnected] = useState(true)
   const [error, setError] = useState(null)
   const isTesting = false
+
+  // ➕ HOOK DE CONEXIÓN (solo lectura del estado de Firebase)
+  const conn = useRTDBConnection()
 
   // Envío de alertas
   const handleSendAlert = async riskProbability => {
@@ -89,7 +96,17 @@ export default function Dashboard() {
   }, [])
 
   if (!data) {
-    return <p className="text-center text-gray-500 mt-10">Cargando datos...</p>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-blue-50/20 to-cyan-50/30">
+        <main className="max-w-7xl mx-auto px-6 py-12">
+          {/* ➕ BADGE ARRIBA A LA DERECHA */}
+          <div className="flex justify-end mb-4">
+            <ConnectionBadge conn={conn} error={error} />
+          </div>
+          <p className="text-center text-gray-500 mt-10">Cargando datos...</p>
+        </main>
+      </div>
+    )
   }
 
   const risk = getRiskColor(data.risk_probability)
@@ -97,6 +114,10 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-blue-50/20 to-cyan-50/30">
       <main className="max-w-7xl mx-auto px-6 py-12">
+        <div className="flex justify-end mb-4">
+          <ConnectionBadge conn={conn} error={error} />
+        </div>
+
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-500/20 to-teal-500/20 p-8 md:p-12">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div>
