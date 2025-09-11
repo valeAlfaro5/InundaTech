@@ -1,19 +1,14 @@
 import { useState, useEffect } from "react"
 import {
   Activity,
-  AlertTriangle,
   Droplets,
-  TrendingUp,
-  MapPin,
   Clock,
   Thermometer,
   Wind,
   Eye,
   Cloud,
-  Droplet,
-  RefreshCw,
-  Wifi,
-  WifiOff
+  CloudRain,
+  Droplet
 } from "lucide-react"
 
 const getRiskColor = probability => {
@@ -149,7 +144,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
           <SmallMetric title="Se siente" value={`${data.features.feelslike.toFixed(1)}°C`} icon={<Wind className="h-6 w-6 text-blue-600" />} />
           <SmallMetric title="Punto de Rocío" value={`${data.features.dew.toFixed(1)}°C`} icon={<Droplet className="h-6 w-6 text-yellow-600" />} />
-          <SmallMetric title="Condición" value={`${data.features.condition}`} icon={<Cloud className="h-6 w-6 text-gray-600" />} />
+          <SmallMetric title="Precipitación" value={`${data.features.precip}`} icon={<CloudRain className="h-6 w-6 text-gray-600" />} />
           <SmallMetric title="Visibilidad" value={`${data.features.visibility.toFixed(1)} km`} icon={<Eye className="h-6 w-6 text-purple-600" />} />
         </div>
 

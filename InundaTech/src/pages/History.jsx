@@ -93,7 +93,7 @@ export default function History() {
       <div className="bg-white shadow rounded-lg">
         <div className="p-4 border-b flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          <span className="font-semibold">Predicciones Detalladas de los últimos 15 días</span>
+          <span className="font-semibold">Predicciones Detalladas para los próximos 15 días</span>
         </div>
         <div className="max-h-[600px] overflow-y-auto p-4 space-y-2">
           {history.length > 0 ? (
