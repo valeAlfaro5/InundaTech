@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db } from "../firebaseClient"; // asegúrate de tener este archivo
+import { db } from "../firebaseClient";
 import { onValue, ref } from "firebase/database";
 
 export function useRTDBConnection() {
