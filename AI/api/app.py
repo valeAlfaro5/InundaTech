@@ -33,7 +33,7 @@ app.add_middleware(
 class WeatherInput(BaseModel):
     payload: dict
     
-    
+#HOY, ACTUALIDAD, HORA A HORA    
 @app.get("/predict_realtime")
 def predict_realtime():
     url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=metric&include=hours%2Ccurrent&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
@@ -72,6 +72,8 @@ def predict_realtime():
     proba = float(PIPE.predict_proba(X)[0,1])
     label = int(proba >= THRESHOLD)
 
+
+    #Incluir features de ESP32
     return {
         "location": data.get("resolvedAddress"),
         "datetime": today["datetime"] + " " + hour_data["datetime"],
@@ -80,7 +82,7 @@ def predict_realtime():
         "risk_label": label
     }
 
-
+#15 DIAS
 @app.get("/predict_daily")
 def predict_daily():
     url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=metric&include=days&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
