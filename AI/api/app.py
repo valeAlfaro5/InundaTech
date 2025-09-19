@@ -186,6 +186,32 @@ def run_model(features: Dict[str, Any]) -> Dict[str, Any]:
     return {"risk_probability": proba, "risk_label": label, "threshold": THRESHOLD}
 
 
+def run_model_weighted_api(features: dict, water_weight=0.6, climate_weight=0.4) -> dict:
+    df = pd.DataFrame([features]).apply(pd.to_numeric, errors="coerce")
+
+    # columnas de agua y clima
+    water_cols = ["distance_cm", "level_pct"]
+    climate_cols = ["precip", "humidity", "sealevelpressure"]
+
+    # Riesgos parciales
+    X_water = df.reindex(columns=water_cols)
+    risk_water_partial = float(PIPE.predict_proba(X_water)[0, 1]) if not X_water.empty else 0.0
+
+    X_climate = df.reindex(columns=climate_cols)
+    risk_climate_partial = float(PIPE.predict_proba(X_climate)[0, 1]) if not X_climate.empty else 0.0
+
+    # Riesgo ponderado
+    risk_weighted = water_weight*risk_water_partial + climate_weight*risk_climate_partial
+    risk_weighted_label = int(risk_weighted >= THRESHOLD)
+
+    return {
+        "risk_water_partial": risk_water_partial,
+        "risk_climate_partial": risk_climate_partial,
+        "risk_weighted": risk_weighted,
+        "risk_weighted_label": risk_weighted_label,
+        "threshold": THRESHOLD
+    }
+
 # ---------------------- Endpoints ----------------------
 
 @app.get("/predict_realtime")
@@ -210,6 +236,7 @@ def predict_realtime(
 
     # Predicción
     out = run_model(features)
+    weighted = run_model_weighted_api(features)
 
     # Campos descriptivos no numéricos (para UI)
     extras = {
@@ -223,7 +250,8 @@ def predict_realtime(
         "features": features,           # combinados
         "esp32_used": bool(esp32_payload),
         **extras,
-        **out
+        **out,
+        **weighted
     }
 
 
@@ -242,17 +270,61 @@ def predict_daily(
         weather_payload = build_weather_payload_from_day(day)
         features = merge_features(weather_payload, esp32_payload)
         out = run_model(features)
+        weighted = run_model_weighted_api(features)
 
         results.append({
             "date": day.get("datetime"),
             "location": data.get("resolvedAddress"),
             "features": features,
             "esp32_used": bool(esp32_payload),
-            **out
+            **out, 
+            **weighted
         })
 
     return {"daily_predictions": results}
 
+CSV_PATH = Path("eta_iota.csv") 
+df_weather = pd.read_csv(CSV_PATH, parse_dates=["datetime"]) 
+
+@app.get("/simulate_realtime")
+def simulate_realtime(
+    date: Optional[str] = Query(None, description="Fecha a consultar del CSV (YYYY-MM-DD)"),
+    device_id: str = Query(default=DEVICE_ID, description="ID del ESP32 para tomar el nivel de agua")
+):
+    """
+    Simula el riesgo combinando datos meteorológicos históricos con datos
+    de agua en tiempo real del ESP32.
+    """
+    # 1) Seleccionar fila del CSV
+    if date:
+        row = df_weather[df_weather["datetime"].dt.strftime("%Y-%m-%d") == date]
+        if row.empty:
+            return {"error": f"No hay datos para {date}"}
+        row = row.iloc[0]
+    else:
+        row = df_weather.iloc[-1]
+
+    # 2) Construir payload de clima
+    features = {
+        "precip": row.get("precip", 0),
+        "humidity": row.get("humidity", 0),
+        "sealevelpressure": row.get("sealevelpressure", 0),
+    }
+
+    # 3) Obtener datos de agua del ESP32
+    esp32_payload = get_latest_esp32(device_id)
+    features.update(esp32_payload)
+
+    # 4) Calcular riesgo ponderado
+    risk = run_model_weighted_api(features, water_weight=0.6, climate_weight=0.4)
+
+    return {
+        "date": str(row["datetime"].date()),
+        "features": features,
+        **risk
+    }
+
+    
 
 @app.get("/health")
 def health():
@@ -270,4 +342,7 @@ def predict(inp: WeatherInput):
     esp = get_latest_esp32(inp.device_id) if inp.use_esp32 else {}
     features = merge_features(base, esp)
     out = run_model(features)
-    return {"features": features, "esp32_used": bool(esp), **out}
+    weighted = run_model_weighted_api(features)
+    return {"features": features, "esp32_used": bool(esp), **out, **weighted}
+
+

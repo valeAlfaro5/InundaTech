@@ -6,7 +6,8 @@ import { LuMessageSquarePlus } from "react-icons/lu";
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Mensajeria", url: "/alertas", icon: LuMessageSquarePlus },
-  { title: "Predicciones", url: "/history", icon: TrendingUpDown }
+  { title: "Predicciones", url: "/history", icon: TrendingUpDown },
+  { title: "Análisis Historico", url: "/huracanes", icon: LogOut },
 ];
 
 export default function AppSidebar() {

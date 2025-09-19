@@ -3,6 +3,35 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+#modelo entrenado con ponderacion: agua 60%, clima 40%
+def run_model_weighted(features: dict, water_weight=0.6, climate_weight=0.4) -> dict:
+    df = pd.DataFrame([features]).apply(pd.to_numeric, errors="coerce")
+
+    # Separar columnas
+    water_cols = [c for c in df.columns if c in ["distance_cm", "level_pct"]]
+    climate_cols = [c for c in df.columns if c in ["precip", "humidity", "sealevelpressure"]]
+
+    # Riesgo parcial agua
+    X_water = df.reindex(columns=water_cols)
+    risk_water_partial = float(PIPE.predict_proba(X_water)[0, 1]) if not X_water.empty else 0.0
+
+    # Riesgo parcial clima
+    X_climate = df.reindex(columns=climate_cols)
+    risk_climate_partial = float(PIPE.predict_proba(X_climate)[0, 1]) if not X_climate.empty else 0.0
+
+    # Riesgo ponderado
+    risk_weighted = water_weight*risk_water_partial + climate_weight*risk_climate_partial
+    risk_weighted_label = int(risk_weighted >= args.threshold)
+
+    return {
+        "risk_water_partial": risk_water_partial,
+        "risk_climate_partial": risk_climate_partial,
+        "risk_weighted": risk_weighted,
+        "risk_weighted_label": risk_weighted_label,
+        "threshold": args.threshold
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="artifacts/model.pkl")

@@ -111,24 +111,24 @@ const AlertsPage = () => {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3 mb-6">
-        <Bell className="w-8 h-8 text-blue-600" />
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Centro de Alertas</h1>
-          <p className="text-gray-600">
-            Envía notificaciones por correo o SMS a la comunidad sobre el estado de inundaciones
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-500 to-teal-500 backdrop-blur-sm border border-white/30 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-teal-400/30"></div>
+        <div className="relative z-10 p-8 md:p-12 text-center space-y-3">
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+            Centro de Alertas y Notificaciones
+          </h1>
+          <p className="text-white/80 text-lg">
+            Envia alertas a la comunidad y revisa el historial de notificaciones
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 📌 Formulario Nueva Alerta */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
           <div className="space-y-4">
-            {/* Título */}
             <div>
               <label className="block text-sm font-medium mb-1">Título</label>
               <input
@@ -139,8 +139,6 @@ const AlertsPage = () => {
                 className="w-full px-3 py-2 border rounded-md text-sm"
               />
             </div>
-
-            {/* Severidad */}
             <div>
               <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
               <select
@@ -155,7 +153,6 @@ const AlertsPage = () => {
               </select>
             </div>
 
-            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
@@ -167,7 +164,6 @@ const AlertsPage = () => {
               />
             </div>
 
-            {/* Método de envío */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Método de Envío</label>
               <div className="flex items-center space-x-6">
@@ -195,7 +191,6 @@ const AlertsPage = () => {
               </div>
             </div>
 
-            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
@@ -216,7 +211,6 @@ const AlertsPage = () => {
           </div>
         </div>
 
-        {/* 📌 Historial de Alertas */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas

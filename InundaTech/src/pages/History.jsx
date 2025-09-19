@@ -82,13 +82,20 @@ export default function History() {
   return (
     <div className="space-y-8 p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-600 bg-clip-text text-transparent">
-            Predicciones de Riesgos y Condiciones 
-          </h2>
+      {/* Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-500 to-teal-500 backdrop-blur-sm border border-white/30 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-teal-400/30"></div>
+        <div className="relative z-10 p-8 md:p-12 text-center space-y-3">
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+            Predicciones de Riesgo y Condiciones
+          </h1>
+          <p className="text-white/80 text-lg">
+            Consulta las predicciones de riesgo de inundación y condiciones
+            meteorológicas para los próximos 15 días
+          </p>
         </div>
       </div>
+
 
       <div className="bg-white shadow rounded-lg">
         <div className="p-4 border-b flex items-center gap-2">
