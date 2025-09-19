@@ -60,7 +60,7 @@ const formatTs = (ts) => {
 };
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(null); // respuesta de la API
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
   const [isConnected, setIsConnected] = useState(true);
   const [error, setError] = useState(null);
@@ -74,7 +74,6 @@ export default function Dashboard() {
   const { data: latest, error: rtError } = useRTDB(`/devices/${DEVICE_ID}/last`);
 
   // === ALERTA: recordar el último ts para no duplicar ===
-  // TS: usa: const lastAlertRef = useRef<number | string | null>(null);
   const lastAlertRef = useRef(null);
 
   // Envío de alertas de IA (probabilidad)
@@ -105,7 +104,10 @@ export default function Dashboard() {
   const fetchRisk = async () => {
     try {
       setError(null);
-      const res = await fetch("http://127.0.0.1:8000/predict_realtime");
+      // ✔️ Ahora la API devuelve weather + esp32 + features + predicción
+      const res = await fetch(
+        "http://127.0.0.1:8000/predict_realtime?use_esp32=true&device_id=esp32-water-01"
+      );
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
       const json = await res.json();
@@ -125,12 +127,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchRisk();
-    const interval = setInterval(fetchRisk, 60000);
+    const interval = setInterval(fetchRisk, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // === DERIVADOS DE NIVEL (altura útil, % y "lleno") ===
-  // Los calculamos fuera de JSX para poder usarlos en el efecto de alerta
+  // ==================== DERIVADOS DE NIVEL (altura útil, % y "lleno") ====================
+  // Datos base desde RTDB (si existen)
   const MAX_DEPTH_CM =
     typeof latest?.max_depth_cm === "number" ? latest.max_depth_cm : 10;
   const HEADSPACE_CM =
@@ -140,8 +142,15 @@ export default function Dashboard() {
       ? latest.usable_depth_cm
       : Math.max(0, MAX_DEPTH_CM - HEADSPACE_CM);
 
+  // Fallback: si RTDB aún no tiene datos, usar lo que vino en la API (data.esp32)
+  const apiEsp32 = data?.esp32 || {};
+
   const distance =
-    typeof latest?.distance_cm === "number" ? latest.distance_cm : null;
+    typeof latest?.distance_cm === "number"
+      ? latest.distance_cm
+      : typeof apiEsp32?.distance_cm === "number"
+      ? apiEsp32.distance_cm
+      : null;
 
   let waterHeight =
     typeof latest?.water_height_cm === "number"
@@ -155,9 +164,11 @@ export default function Dashboard() {
       ? latest.fill_pct
       : waterHeight != null && USABLE_DEPTH_CM > 0
       ? (waterHeight / USABLE_DEPTH_CM) * 100
+      : typeof apiEsp32?.level_pct === "number"
+      ? apiEsp32.level_pct
       : null;
 
-  // ¿Está lleno? (≥ 7 cm útiles con tolerancia)
+  // ¿Está lleno? (≥ profundidad útil con tolerancia)
   const isFull =
     waterHeight != null &&
     USABLE_DEPTH_CM > 0 &&
@@ -260,22 +271,31 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* MÉTRICAS PRINCIPALES - ahora usando data.weather */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
           <MetricCard
             title="Temperatura"
-            value={`${data.features.temp.toFixed(1)}°C`}
+            value={
+              data.weather?.temp != null
+                ? `${data.weather.temp.toFixed(1)}°C`
+                : "—"
+            }
             icon={<Thermometer className="h-8 w-8 text-white" />}
             gradient="from-red-500 to-orange-500"
           />
           <MetricCard
             title="Humedad"
-            value={`${data.features.humidity.toFixed(1)}%`}
+            value={
+              data.weather?.humidity != null
+                ? `${data.weather.humidity.toFixed(1)}%`
+                : "—"
+            }
             icon={<Droplets className="h-8 w-8 text-white" />}
             gradient="from-blue-500 to-cyan-500"
           />
           <MetricCard
             title="Condición"
-            value={`${data.features.condition}`}
+            value={`${data.weather?.condition ?? "—"}`}
             icon={<Cloud className="h-8 w-8 text-white" />}
             gradient="from-green-500 to-emerald-500"
           />
@@ -284,27 +304,41 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
           <SmallMetric
             title="Se siente"
-            value={`${data.features.feelslike.toFixed(1)}°C`}
+            value={
+              data.weather?.feelslike != null
+                ? `${data.weather.feelslike.toFixed(1)}°C`
+                : "—"
+            }
             icon={<Wind className="h-6 w-6 text-blue-600" />}
           />
           <SmallMetric
             title="Punto de Rocío"
-            value={`${data.features.dew.toFixed(1)}°C`}
+            value={
+              data.weather?.dew != null
+                ? `${data.weather.dew.toFixed(1)}°C`
+                : "—"
+            }
             icon={<Droplet className="h-6 w-6 text-yellow-600" />}
           />
           <SmallMetric
             title="Precipitación"
-            value={`${data.features.precip}`}
+            value={
+              data.weather?.precip != null ? `${data.weather.precip}` : "—"
+            }
             icon={<CloudRain className="h-6 w-6 text-gray-600" />}
           />
           <SmallMetric
             title="Visibilidad"
-            value={`${data.features.visibility.toFixed(1)} km`}
+            value={
+              data.weather?.visibility != null
+                ? `${data.weather.visibility.toFixed(1)} km`
+                : "—"
+            }
             icon={<Eye className="h-6 w-6 text-purple-600" />}
           />
         </div>
 
-        {/* Datos del ESP32 (RTDB en vivo, último envío) */}
+        {/* Datos del ESP32 (RTDB en vivo o fallback desde API) */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mt-10">
           <h3 className="text-xl font-bold flex items-center space-x-3 mb-6">
             <Activity className="h-5 w-5 text-blue-600" />
@@ -317,7 +351,7 @@ export default function Dashboard() {
             </p>
           )}
 
-          {latest ? (
+          {latest || data.esp32 ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <p className="mb-2 font-medium">
@@ -335,7 +369,9 @@ export default function Dashboard() {
                 <p className="mb-2 font-medium">
                   <strong>Altura de agua (útil):</strong>{" "}
                   {waterHeight != null
-                    ? `${waterHeight.toFixed(2)} cm / ${USABLE_DEPTH_CM.toFixed(2)} cm`
+                    ? `${waterHeight.toFixed(2)} cm / ${USABLE_DEPTH_CM.toFixed(
+                        2
+                      )} cm`
                     : "—"}
                 </p>
 
@@ -347,7 +383,11 @@ export default function Dashboard() {
 
               <p className="mb-4 text-gray-600">
                 <strong>Timestamp:</strong>{" "}
-                {latest.ts != null ? formatTs(latest.ts) : "—"}
+                {latest?.ts != null
+                  ? formatTs(latest.ts)
+                  : data.esp32
+                  ? "(desde API)"
+                  : "—"}
               </p>
 
               {(Boolean(latest?.overfill_guard) || isFull) && (

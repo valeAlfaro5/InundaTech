@@ -9,12 +9,16 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any
 
-app = FastAPI(title="Flood Risk API", version="0.2.0")
+app = FastAPI(title="Flood Risk API", version="0.5.0")
 
 # --- Modelo y features ---
 PIPE = joblib.load(str(Path("artifacts") / "model.pkl"))
 FEATURES = json.loads((Path("artifacts") / "feature_names.json").read_text(encoding="utf-8"))
-THRESHOLD = 0.20  # ajústalo según operación
+THRESHOLD = 0.25  # corte para riesgo
+
+# --- Pesos para el ensamble ---
+WEIGHT_WATER = 0.7
+WEIGHT_CLIMATE = 0.3
 
 # --- CORS ---
 origins = [
@@ -31,7 +35,6 @@ app.add_middleware(
 )
 
 # --- Config de servicios externos ---
-# Visual Crossing (coordenadas San Pedro Sula aprox. 15.5645, -88.0286)
 VC_URL_REALTIME = (
     "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
     "15.5645%2C-88.0286?unitGroup=metric&include=hours%2Ccurrent&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
@@ -42,13 +45,12 @@ VC_URL_DAILY = (
 )
 
 # Firebase RTDB
-FIREBASE_DB_URL = "https://inundatech-ecc38-default-rtdb.firebaseio.com"  # sin '/' final
-DEVICE_ID = "esp32-water-01"  # puedes sobreescribirlo vía query param en los endpoints
+FIREBASE_DB_URL = "https://inundatech-ecc38-default-rtdb.firebaseio.com"
+DEVICE_ID = "esp32-water-01"
 
 
 class WeatherInput(BaseModel):
     payload: dict
-    # Si el cliente quiere mezclar automáticamente con los últimos datos del ESP32
     use_esp32: Optional[bool] = False
     device_id: Optional[str] = DEVICE_ID
 
@@ -56,7 +58,6 @@ class WeatherInput(BaseModel):
 # ---------------------- Helpers ----------------------
 
 def get_current_hour_str() -> str:
-    # Formato 'HH:00:00' para hacer match con VisualCrossing "hours[].datetime"
     return datetime.now().strftime("%H:00:00")
 
 
@@ -87,12 +88,17 @@ def build_weather_payload_from_hour(hour: Dict[str, Any]) -> Dict[str, Any]:
         "solarenergy": hour.get("solarenergy"),
         "dew": hour.get("dew"),
         "uvindex": hour.get("uvindex"),
-        # features agregados a partir de ventanas (si tu pipeline los crea, aquí puedes llenarlos o dejarlos en 0)
         "precip_sum_3d": 0,
         "precip_max_3d": 0,
-        # Campos descriptivos (no numéricos) NO deben entrar al modelo, pero podemos devolverlos en la respuesta
+    }
+
+
+def build_weather_meta_from_hour(hour: Dict[str, Any]) -> Dict[str, Any]:
+    return {
         "condition": hour.get("conditions"),
-        # "description": hour.get("description"),
+        "icon": hour.get("icon"),
+        "description": hour.get("description"),
+        "datetime": hour.get("datetime"),
     }
 
 
@@ -116,59 +122,57 @@ def build_weather_payload_from_day(day: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_latest_esp32(device_id: str = DEVICE_ID) -> Dict[str, Any]:
-    """
-    Lee del RTDB el último paquete del dispositivo. Se contemplan dos esquemas comunes:
-    1) /devices/{device_id}/latest  -> objeto plano
-    2) /devices/{device_id}/telemetry -> colección con timestamps; tomamos el último con orderBy y limitToLast
-    Devuelve un dict con claves numéricas esperadas por el modelo, p. ej. distance_cm, level_pct, etc.
-    """
-    # Caso 1: /latest
+    """Busca el último paquete del ESP32 en RTDB."""
+    def pick_fields(d: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "distance_cm": d.get("distance_cm"),
+            "level_pct": d.get("level_pct"),
+            "fill_pct": d.get("fill_pct"),
+            "water_height_cm": d.get("water_height_cm"),
+            "max_depth_cm": d.get("max_depth_cm"),
+            "headspace_cm": d.get("headspace_cm"),
+            "usable_depth_cm": d.get("usable_depth_cm"),
+        }
+
+    # Caso 1: /last
     try:
-        url_latest = f"{FIREBASE_DB_URL}/devices/{device_id}/latest.json"
-        r = requests.get(url_latest, timeout=10)
-        r.raise_for_status()
-        latest = r.json()
-        if isinstance(latest, dict) and latest:
-            return {
-                "distance_cm": latest.get("distance_cm"),
-                "level_pct": latest.get("level_pct"),
-                # agrega aquí más campos si tu ESP32 los envía (ej. "temperature_water", etc.)
-            }
+        url_last = f"{FIREBASE_DB_URL}/devices/{device_id}/last.json"
+        r = requests.get(url_last, timeout=10); r.raise_for_status()
+        last = r.json()
+        if isinstance(last, dict) and last:
+            return pick_fields(last)
     except Exception:
         pass
 
-    # Caso 2: /telemetry con query (requiere reglas abiertas o auth)
-    # Tomamos el último registro por timestamp (si existe ese campo)
+    # Caso 2: /latest
     try:
-        # Si tus nodos tienen "timestamp" entero/milisegundos:
-        #   ?orderBy="timestamp"&limitToLast=1
-        # Si no, ten un campo incremental como "seq".
+        url_latest = f"{FIREBASE_DB_URL}/devices/{device_id}/latest.json"
+        r = requests.get(url_latest, timeout=10); r.raise_for_status()
+        latest = r.json()
+        if isinstance(latest, dict) and latest:
+            return pick_fields(latest)
+    except Exception:
+        pass
+
+    # Caso 3: /telemetry
+    try:
         url_tele = (
             f'{FIREBASE_DB_URL}/devices/{device_id}/telemetry.json'
             f'?orderBy="timestamp"&limitToLast=1'
         )
-        r = requests.get(url_tele, timeout=10)
-        r.raise_for_status()
+        r = requests.get(url_tele, timeout=10); r.raise_for_status()
         data = r.json() or {}
         if isinstance(data, dict) and data:
-            # obtener el único ítem
             _, last_item = next(iter(sorted(data.items(), key=lambda kv: kv[0])))
-            return {
-                "distance_cm": last_item.get("distance_cm"),
-                "level_pct": last_item.get("level_pct"),
-            }
+            if isinstance(last_item, dict):
+                return pick_fields(last_item)
     except Exception:
         pass
 
-    # Si no hay datos, devolvemos vacío (no rompe el merge)
     return {}
 
 
 def merge_features(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Une los diccionarios de features dando prioridad a 'extra' (ESP32)
-    cuando existan claves en conflicto.
-    """
     merged = dict(base or {})
     for k, v in (extra or {}).items():
         if v is not None:
@@ -177,64 +181,156 @@ def merge_features(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any
 
 
 def run_model(features: Dict[str, Any]) -> Dict[str, Any]:
-    # Asegurar numéricos
     df = pd.DataFrame([features]).apply(pd.to_numeric, errors="coerce")
-    # Reindex al orden y set de columnas esperado por el modelo
     X = df.reindex(columns=FEATURES)
     proba = float(PIPE.predict_proba(X)[0, 1])
     label = int(proba >= THRESHOLD)
-    return {"risk_probability": proba, "risk_label": label, "threshold": THRESHOLD}
+    result = {"risk_probability": proba, "risk_label": label, "threshold": THRESHOLD}
+
+    print("=== Predicción IA (solo clima) ===")
+    print("Features usados:", features)
+    print("Probabilidad climática:", proba)
+    print("Label asignado:", label)
+    print("=====================")
+
+    return result
+
+
+# Conversión segura
+def _to_float(x, default=None):
+    try:
+        if x is None: return default
+        if isinstance(x, (int, float)): return float(x)
+        return float(str(x).strip())
+    except Exception:
+        return default
+
+
+# Conversión segura
+def _to_float(x, default=None):
+    try:
+        if x is None: return default
+        if isinstance(x, (int, float)): return float(x)
+        return float(str(x).strip())
+    except Exception:
+        return default
+
+def compute_water_score(
+    esp32: Dict[str, Any],
+    max_depth_cm: float = 10.0,
+    headspace_cm: float = 3.0
+) -> float:
+    """
+    Devuelve un score ∈ [0,1] donde 1 = nivel crítico.
+    Toma el MÁXIMO entre las señales disponibles:
+      - level_pct / 100
+      - fill_pct / 100
+      - water_height_cm / usable_depth
+      - (max_depth - distance_cm) / usable_depth
+    Así evitamos que un '0' por defecto tape señales reales (>0).
+    """
+    if not esp32:
+        return 0.0
+
+    candidates = []
+
+    # 1) Porcentajes directos
+    lp = _to_float(esp32.get("level_pct"))
+    if lp is not None:
+        candidates.append(lp / 100.0)
+
+    fp = _to_float(esp32.get("fill_pct"))
+    if fp is not None:
+        candidates.append(fp / 100.0)
+
+    # 2) Geometría (para normalizar alturas/distancia)
+    usable = _to_float(esp32.get("usable_depth_cm"))
+    md = _to_float(esp32.get("max_depth_cm"), max_depth_cm)
+    hs = _to_float(esp32.get("headspace_cm"), headspace_cm)
+    if usable is None and (md is not None and hs is not None):
+        usable = max(0.0, md - hs)
+
+    # 3) Altura de agua útil directa
+    wh = _to_float(esp32.get("water_height_cm"))
+    if wh is not None and usable and usable > 0:
+        candidates.append(wh / usable)
+
+    # 4) Distancia al agua -> altura útil
+    d = _to_float(esp32.get("distance_cm"))
+    if d is not None and usable and usable > 0 and md is not None:
+        water_h = max(0.0, min(usable, md - d))
+        candidates.append(water_h / usable)
+
+    # Clamp y selección
+    cleaned = [max(0.0, min(1.0, c)) for c in candidates if c is not None]
+    if cleaned:
+        score = max(cleaned)
+        print(f"[AGUA] señales={candidates} -> score={round(score,3)}")
+        return score
+
+    print("[AGUA] Insuficiente info para calcular score. Payload:", esp32)
+    return 0.0
 
 
 # ---------------------- Endpoints ----------------------
 
 @app.get("/predict_realtime")
 def predict_realtime(
-    use_esp32: bool = Query(default=True, description="Si True, mezcla con últimos datos del ESP32"),
-    device_id: str = Query(default=DEVICE_ID, description="ID del dispositivo ESP32 en RTDB")
+    use_esp32: bool = Query(default=True),
+    device_id: str = Query(default=DEVICE_ID),
+    max_depth_cm: float = Query(default=10.0),
+    headspace_cm: float = Query(default=3.0)
 ):
     data = fetch_visualcrossing_realtime()
 
-    # Selección de la hora actual o fallback a la primera
     current_hour = get_current_hour_str()
     today = data["days"][0]
     hour_data = next((h for h in today.get("hours", []) if h.get("datetime") == current_hour),
                      (today.get("hours") or [{}])[0])
 
-    # Payload meteo numérico para el modelo
-    weather_payload = build_weather_payload_from_hour(hour_data)
-
-    # Mezcla con ESP32 si se pide
+    weather_num = build_weather_payload_from_hour(hour_data)
+    weather_meta = build_weather_meta_from_hour(hour_data)
     esp32_payload = get_latest_esp32(device_id) if use_esp32 else {}
-    features = merge_features(weather_payload, esp32_payload)
 
-    # Predicción
+    features = merge_features(weather_num, esp32_payload)
     out = run_model(features)
 
-    # Campos descriptivos no numéricos (para UI)
-    extras = {
-        "condition": hour_data.get("conditions"),
-        "description": hour_data.get("description"),
-    }
+    climate_probability = out["risk_probability"]
+    water_score = compute_water_score(esp32_payload, max_depth_cm=max_depth_cm, headspace_cm=headspace_cm)
+    combined = WEIGHT_WATER * water_score + WEIGHT_CLIMATE * climate_probability
+    label = int(combined >= THRESHOLD)
+
+    print("[ENSAMBLE] climate=", round(climate_probability, 3),
+          " water=", round(water_score, 3),
+          " => combined=", round(combined, 3),
+          " esp32=", esp32_payload)
 
     return {
         "location": data.get("resolvedAddress"),
-        "datetime": f'{today.get("datetime", "")} {hour_data.get("datetime", "")}',
-        "features": features,           # combinados
+        "datetime": f'{today.get("datetime", "")} {weather_meta.get("datetime", "")}',
+        "weather": {**weather_num, **weather_meta},
+        "esp32": esp32_payload or None,
+        "features": features,
         "esp32_used": bool(esp32_payload),
-        **extras,
-        **out
+
+        "climate_probability": climate_probability,
+        "water_score": water_score,
+
+        "risk_probability": combined,
+        "risk_label": label,
+        "threshold": THRESHOLD
     }
 
 
 @app.get("/predict_daily")
 def predict_daily(
-    use_esp32: bool = Query(default=True, description="Si True, mezcla cada día con últimos datos del ESP32"),
-    device_id: str = Query(default=DEVICE_ID, description="ID del dispositivo ESP32 en RTDB"),
-    days: int = Query(default=15, ge=1, le=15, description="Cantidad de días (máx. 15)")
+    use_esp32: bool = Query(default=True),
+    device_id: str = Query(default=DEVICE_ID),
+    days: int = Query(default=15, ge=1, le=15),
+    max_depth_cm: float = Query(default=10.0),
+    headspace_cm: float = Query(default=3.0)
 ):
     data = fetch_visualcrossing_daily()
-
     esp32_payload = get_latest_esp32(device_id) if use_esp32 else {}
     results = []
 
@@ -243,12 +339,25 @@ def predict_daily(
         features = merge_features(weather_payload, esp32_payload)
         out = run_model(features)
 
+        climate_probability = out["risk_probability"]
+        water_score = compute_water_score(esp32_payload, max_depth_cm=max_depth_cm, headspace_cm=headspace_cm)
+        combined = WEIGHT_WATER * water_score + WEIGHT_CLIMATE * climate_probability
+        label = int(combined >= THRESHOLD)
+
         results.append({
             "date": day.get("datetime"),
             "location": data.get("resolvedAddress"),
+            "weather": {**weather_payload},
+            "esp32": esp32_payload or None,
             "features": features,
             "esp32_used": bool(esp32_payload),
-            **out
+
+            "climate_probability": climate_probability,
+            "water_score": water_score,
+
+            "risk_probability": combined,
+            "risk_label": label,
+            "threshold": THRESHOLD
         })
 
     return {"daily_predictions": results}
@@ -261,13 +370,23 @@ def health():
 
 @app.post("/predict")
 def predict(inp: WeatherInput):
-    """
-    - Si el cliente manda payload puro (solo weather o ya combinado), se usa tal cual.
-    - Si use_esp32=True, se fusiona el payload de entrada con los últimos datos del ESP32
-      (los campos del ESP32 tienen prioridad).
-    """
     base = dict(inp.payload or {})
     esp = get_latest_esp32(inp.device_id) if inp.use_esp32 else {}
     features = merge_features(base, esp)
     out = run_model(features)
-    return {"features": features, "esp32_used": bool(esp), **out}
+
+    climate_probability = out["risk_probability"]
+    water_score = compute_water_score(esp)
+    combined = WEIGHT_WATER * water_score + WEIGHT_CLIMATE * climate_probability
+    label = int(combined >= THRESHOLD)
+
+    return {
+        "features": features,
+        "esp32": esp or None,
+        "esp32_used": bool(esp),
+        "climate_probability": climate_probability,
+        "water_score": water_score,
+        "risk_probability": combined,
+        "risk_label": label,
+        "threshold": THRESHOLD
+    }
