@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Activity,
   Droplets,
@@ -15,6 +15,9 @@ import {
 import ConnectionBadge from "../components/ConnectionBadge";
 import { useRTDBConnection } from "../hooks/useRTDBConnection";
 import { useRTDB } from "../hooks/useRTDB";
+
+const FIREBASE_DB_URL = "https://inundatech-ecc38-default-rtdb.firebaseio.com";
+const EPSILON_CM = 0.5; // tolerancia 5 mm para marcar 100%
 
 const getRiskColor = (probability) => {
   if (probability < 0.15)
@@ -48,8 +51,7 @@ const Mensaje = (prob) => {
   return "🆘 Riesgo crítico. Activar protocolos de emergencia ahora.";
 };
 
-// 🔧 formateo del timestamp que manda el ESP32 (millis desde arranque)
-// si en el futuro envías epoch ms real (>1e12), se verá como fecha/hora local
+// 🔧 formateo del timestamp (millis desde arranque o epoch ms)
 const formatTs = (ts) => {
   if (ts == null) return "—";
   if (ts > 1e12) return new Date(ts).toLocaleString();
@@ -62,7 +64,7 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
   const [isConnected, setIsConnected] = useState(true);
   const [error, setError] = useState(null);
-  const isTesting = false;
+  const isTesting = true;
 
   // ➕ HOOK DE CONEXIÓN (solo lectura del estado de Firebase)
   const conn = useRTDBConnection();
@@ -71,11 +73,11 @@ export default function Dashboard() {
   const DEVICE_ID = "esp32-water-01";
   const { data: latest, error: rtError } = useRTDB(`/devices/${DEVICE_ID}/last`);
 
-  // (opcional) si también lees un nodo de riesgo en RTDB:
-  // const { data: rtRealtime } = useRTDB("/inundatech/realtime");
-  // const liveRisk = rtRealtime?.risk_probability ?? data?.risk_probability;
+  // === ALERTA: recordar el último ts para no duplicar ===
+  // TS: usa: const lastAlertRef = useRef<number | string | null>(null);
+  const lastAlertRef = useRef(null);
 
-  // Envío de alertas
+  // Envío de alertas de IA (probabilidad)
   const handleSendAlert = async (riskProbability) => {
     const riskMsg = Mensaje(riskProbability);
     const riskLevel = getRiskColor(riskProbability).label;
@@ -86,9 +88,7 @@ export default function Dashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: `Alerta de Inundación - Riesgo ${(
-            riskProbability * 100
-          ).toFixed(1)}%`,
+          title: `Alerta de Inundación - Riesgo ${(riskProbability * 100).toFixed(1)}%`,
           message: fullMessage,
           method: "email",
           severity: riskLevel,
@@ -106,7 +106,6 @@ export default function Dashboard() {
     try {
       setError(null);
       const res = await fetch("http://127.0.0.1:8000/predict_realtime");
-
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
       const json = await res.json();
@@ -130,11 +129,94 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // === DERIVADOS DE NIVEL (altura útil, % y "lleno") ===
+  // Los calculamos fuera de JSX para poder usarlos en el efecto de alerta
+  const MAX_DEPTH_CM =
+    typeof latest?.max_depth_cm === "number" ? latest.max_depth_cm : 10;
+  const HEADSPACE_CM =
+    typeof latest?.headspace_cm === "number" ? latest.headspace_cm : 3;
+  const USABLE_DEPTH_CM =
+    typeof latest?.usable_depth_cm === "number"
+      ? latest.usable_depth_cm
+      : Math.max(0, MAX_DEPTH_CM - HEADSPACE_CM);
+
+  const distance =
+    typeof latest?.distance_cm === "number" ? latest.distance_cm : null;
+
+  let waterHeight =
+    typeof latest?.water_height_cm === "number"
+      ? latest.water_height_cm
+      : distance != null
+      ? Math.max(0, Math.min(USABLE_DEPTH_CM, MAX_DEPTH_CM - distance))
+      : null;
+
+  let fillPct =
+    typeof latest?.fill_pct === "number"
+      ? latest.fill_pct
+      : waterHeight != null && USABLE_DEPTH_CM > 0
+      ? (waterHeight / USABLE_DEPTH_CM) * 100
+      : null;
+
+  // ¿Está lleno? (≥ 7 cm útiles con tolerancia)
+  const isFull =
+    waterHeight != null &&
+    USABLE_DEPTH_CM > 0 &&
+    waterHeight >= USABLE_DEPTH_CM - EPSILON_CM;
+
+  if (isFull) fillPct = 100;
+
+  // Clamps defensivos
+  if (waterHeight != null) {
+    waterHeight = Math.max(0, Math.min(USABLE_DEPTH_CM, waterHeight));
+  }
+  if (fillPct != null) {
+    fillPct = Math.max(0, Math.min(100, fillPct));
+  }
+
+  // === EFECTO: registrar alerta en RTDB cuando se alcanza "lleno" ===
+  useEffect(() => {
+    if (!latest) return;
+    if (!isFull) return;
+
+    const tsKey = latest.ts ?? Date.now();
+    if (lastAlertRef.current === tsKey) return; // evita duplicado
+    lastAlertRef.current = tsKey;
+
+    const payload = {
+      device_id: latest.device_id ?? DEVICE_ID,
+      type: "FULL_TANK",
+      message: "Nivel de agua alcanzó el 100% de la profundidad útil.",
+      max_depth_cm: MAX_DEPTH_CM,
+      headspace_cm: HEADSPACE_CM,
+      usable_depth_cm: USABLE_DEPTH_CM,
+      water_height_cm: waterHeight ?? null,
+      fill_pct: fillPct ?? null,
+      overfill_guard: Boolean(latest?.overfill_guard),
+      ts: latest.ts ?? Date.now(),
+    };
+
+    fetch(`${FIREBASE_DB_URL}/alerts.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // opcional: toast
+    });
+  }, [
+    latest,
+    isFull,
+    MAX_DEPTH_CM,
+    HEADSPACE_CM,
+    USABLE_DEPTH_CM,
+    waterHeight,
+    fillPct,
+  ]);
+
+  // ==================== RENDER ====================
   if (!data) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-white via-blue-50/20 to-cyan-50/30">
         <main className="max-w-7xl mx-auto px-6 py-12">
-          {/* ➕ BADGE ARRIBA A LA DERECHA */}
           <div className="flex justify-end mb-4">
             <ConnectionBadge conn={conn} error={error || rtError} />
           </div>
@@ -229,7 +311,6 @@ export default function Dashboard() {
             <span>Detalles del nivel del Agua</span>
           </h3>
 
-          {/* Error de RTDB si aplica */}
           {rtError && (
             <p className="mb-4 text-red-600 text-sm">
               Error leyendo RTDB: {rtError}
@@ -238,29 +319,55 @@ export default function Dashboard() {
 
           {latest ? (
             <>
-              <p className="mb-2 font-medium">
-                <strong>Distancia:</strong>{" "}
-                {latest.distance_cm != null
-                  ? `${latest.distance_cm.toFixed(2)} cm`
-                  : "—"}
-              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <p className="mb-2 font-medium">
+                  <strong>Distancia sensor → agua:</strong>{" "}
+                  {distance != null ? `${distance.toFixed(2)} cm` : "—"}
+                </p>
 
-              <p className="mb-2 font-medium">
-                <strong>Nivel de llenado:</strong>{" "}
-                {latest.level_pct != null
-                  ? `${latest.level_pct.toFixed(1)} %`
-                  : "—"}
-              </p>
+                <p className="mb-2 font-medium">
+                  <strong>Margen de seguridad (headspace):</strong>{" "}
+                  {HEADSPACE_CM?.toFixed
+                    ? `${HEADSPACE_CM.toFixed(2)} cm`
+                    : `${HEADSPACE_CM} cm`}
+                </p>
+
+                <p className="mb-2 font-medium">
+                  <strong>Altura de agua (útil):</strong>{" "}
+                  {waterHeight != null
+                    ? `${waterHeight.toFixed(2)} cm / ${USABLE_DEPTH_CM.toFixed(2)} cm`
+                    : "—"}
+                </p>
+
+                <p className="mb-2 font-medium">
+                  <strong>Nivel de llenado:</strong>{" "}
+                  {fillPct != null ? `${fillPct.toFixed(1)} %` : "—"}
+                </p>
+              </div>
 
               <p className="mb-4 text-gray-600">
-                <strong>Timestamp:</strong> {formatTs(latest.ts)}
+                <strong>Timestamp:</strong>{" "}
+                {latest.ts != null ? formatTs(latest.ts) : "—"}
               </p>
 
-              {/* Barra de llenado usando level_pct */}
+              {(Boolean(latest?.overfill_guard) || isFull) && (
+                <div className="mb-4 text-sm p-3 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-800">
+                  {isFull
+                    ? "Tanque lleno (100% de la profundidad útil)."
+                    : "Aviso: el nivel de agua está dentro del margen de seguridad del sensor."}
+                </div>
+              )}
+
+              {/* Barra de llenado (sobre profundidad útil) */}
               <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-4 bg-blue-500 transition-all duration-500"
-                  style={{ width: `${latest.level_pct ?? 0}%` }}
+                  style={{ width: `${fillPct ?? 0}%` }}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={fillPct ?? 0}
+                  role="progressbar"
+                  title={fillPct != null ? `${fillPct.toFixed(1)}%` : "0%"}
                 />
               </div>
             </>

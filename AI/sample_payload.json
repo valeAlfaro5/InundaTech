@@ -1,9 +1,10 @@
 {
-  "payload": {
-    "precip": 2.0,
-    "humidity": 60.0,
-    "sealevelpressure": 1015.0,
-    "distance_cm": 10.5,
-    "level_pct": 5.0
+    "payload": {
+      "precip": 20.0,
+      "humidity": 90.0,
+      "sealevelpressure": 995.0,
+      "distance_cm": 300.0,
+      "level_pct": 8500.0
+
+    }
   }
-}

@@ -1,5 +1,5 @@
 # AI/api/app.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from pathlib import Path
 import joblib, json
@@ -7,120 +7,248 @@ import pandas as pd
 import requests
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, Dict, Any
 
+app = FastAPI(title="Flood Risk API", version="0.2.0")
 
-app = FastAPI(title="Flood Risk API", version="0.1.1")
-
-# Carga modelo y columnas usadas en entrenamiento
+# --- Modelo y features ---
 PIPE = joblib.load(str(Path("artifacts") / "model.pkl"))
 FEATURES = json.loads((Path("artifacts") / "feature_names.json").read_text(encoding="utf-8"))
 THRESHOLD = 0.20  # ajústalo según operación
 
+# --- CORS ---
 origins = [
-    "http://localhost:5173",  
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "*"  
+    "*"
 ]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # orígenes permitidos
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],            # permite todos los métodos (GET, POST, etc.)
-    allow_headers=["*"],            # permite todos los headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# --- Config de servicios externos ---
+# Visual Crossing (coordenadas San Pedro Sula aprox. 15.5645, -88.0286)
+VC_URL_REALTIME = (
+    "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
+    "15.5645%2C-88.0286?unitGroup=metric&include=hours%2Ccurrent&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
+)
+VC_URL_DAILY = (
+    "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
+    "15.5645%2C-88.0286?unitGroup=metric&include=days&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
+)
+
+# Firebase RTDB
+FIREBASE_DB_URL = "https://inundatech-ecc38-default-rtdb.firebaseio.com"  # sin '/' final
+DEVICE_ID = "esp32-water-01"  # puedes sobreescribirlo vía query param en los endpoints
+
 
 class WeatherInput(BaseModel):
     payload: dict
-    
-#HOY, ACTUALIDAD, HORA A HORA    
-@app.get("/predict_realtime")
-def predict_realtime():
-    url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=metric&include=hours%2Ccurrent&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
-    res = requests.get(url)
+    # Si el cliente quiere mezclar automáticamente con los últimos datos del ESP32
+    use_esp32: Optional[bool] = False
+    device_id: Optional[str] = DEVICE_ID
+
+
+# ---------------------- Helpers ----------------------
+
+def get_current_hour_str() -> str:
+    # Formato 'HH:00:00' para hacer match con VisualCrossing "hours[].datetime"
+    return datetime.now().strftime("%H:00:00")
+
+
+def fetch_visualcrossing_realtime() -> Dict[str, Any]:
+    res = requests.get(VC_URL_REALTIME, timeout=15)
     res.raise_for_status()
-    data = res.json()
+    return res.json()
 
-    # toma la hora actual
-    current_hour = datetime.now().strftime("%H:00:00")
-    today = data["days"][0]
-    hour_data = next((h for h in today["hours"] if h["datetime"] == current_hour), today["hours"][0])
 
-    payload = {
-        "temp": hour_data.get("temp"),
-        "feelslike": hour_data.get("feelslike"),
-        "humidity": hour_data.get("humidity"),
-        "precip": hour_data.get("precip"),
-        "windspeed": hour_data.get("windspeed"),
-        "windgust": hour_data.get("windgust"),
-        "cloudcover": hour_data.get("cloudcover"),
-        "visibility": hour_data.get("visibility"),
-        "sealevelpressure": hour_data.get("sealevelpressure"),
-        "solarradiation": hour_data.get("solarradiation"),
-        "solarenergy": hour_data.get("solarenergy"),
-        "dew": hour_data.get("dew"),
-        "uvindex": hour_data.get("uvindex"),
-        "precip_sum_3d": 0,  
+def fetch_visualcrossing_daily() -> Dict[str, Any]:
+    res = requests.get(VC_URL_DAILY, timeout=20)
+    res.raise_for_status()
+    return res.json()
+
+
+def build_weather_payload_from_hour(hour: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "temp": hour.get("temp"),
+        "feelslike": hour.get("feelslike"),
+        "humidity": hour.get("humidity"),
+        "precip": hour.get("precip"),
+        "windspeed": hour.get("windspeed"),
+        "windgust": hour.get("windgust"),
+        "cloudcover": hour.get("cloudcover"),
+        "visibility": hour.get("visibility"),
+        "sealevelpressure": hour.get("sealevelpressure"),
+        "solarradiation": hour.get("solarradiation"),
+        "solarenergy": hour.get("solarenergy"),
+        "dew": hour.get("dew"),
+        "uvindex": hour.get("uvindex"),
+        # features agregados a partir de ventanas (si tu pipeline los crea, aquí puedes llenarlos o dejarlos en 0)
+        "precip_sum_3d": 0,
         "precip_max_3d": 0,
-        "condition": hour_data.get("conditions"),
-        "description": hour_data.get("description")
+        # Campos descriptivos (no numéricos) NO deben entrar al modelo, pero podemos devolverlos en la respuesta
+        "condition": hour.get("conditions"),
+        # "description": hour.get("description"),
     }
 
-    # predicción
-    df = pd.DataFrame([payload]).apply(pd.to_numeric, errors="coerce")
+
+def build_weather_payload_from_day(day: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "temp": day.get("temp"),
+        "humidity": day.get("humidity"),
+        "precip": day.get("precip"),
+        "windspeed": day.get("windspeed"),
+        "windgust": day.get("windgust"),
+        "cloudcover": day.get("cloudcover"),
+        "visibility": day.get("visibility"),
+        "sealevelpressure": day.get("sealevelpressure"),
+        "solarradiation": day.get("solarradiation"),
+        "solarenergy": day.get("solarenergy"),
+        "dew": day.get("dew"),
+        "uvindex": day.get("uvindex"),
+        "precip_sum_3d": 0,
+        "precip_max_3d": 0,
+    }
+
+
+def get_latest_esp32(device_id: str = DEVICE_ID) -> Dict[str, Any]:
+    """
+    Lee del RTDB el último paquete del dispositivo. Se contemplan dos esquemas comunes:
+    1) /devices/{device_id}/latest  -> objeto plano
+    2) /devices/{device_id}/telemetry -> colección con timestamps; tomamos el último con orderBy y limitToLast
+    Devuelve un dict con claves numéricas esperadas por el modelo, p. ej. distance_cm, level_pct, etc.
+    """
+    # Caso 1: /latest
+    try:
+        url_latest = f"{FIREBASE_DB_URL}/devices/{device_id}/latest.json"
+        r = requests.get(url_latest, timeout=10)
+        r.raise_for_status()
+        latest = r.json()
+        if isinstance(latest, dict) and latest:
+            return {
+                "distance_cm": latest.get("distance_cm"),
+                "level_pct": latest.get("level_pct"),
+                # agrega aquí más campos si tu ESP32 los envía (ej. "temperature_water", etc.)
+            }
+    except Exception:
+        pass
+
+    # Caso 2: /telemetry con query (requiere reglas abiertas o auth)
+    # Tomamos el último registro por timestamp (si existe ese campo)
+    try:
+        # Si tus nodos tienen "timestamp" entero/milisegundos:
+        #   ?orderBy="timestamp"&limitToLast=1
+        # Si no, ten un campo incremental como "seq".
+        url_tele = (
+            f'{FIREBASE_DB_URL}/devices/{device_id}/telemetry.json'
+            f'?orderBy="timestamp"&limitToLast=1'
+        )
+        r = requests.get(url_tele, timeout=10)
+        r.raise_for_status()
+        data = r.json() or {}
+        if isinstance(data, dict) and data:
+            # obtener el único ítem
+            _, last_item = next(iter(sorted(data.items(), key=lambda kv: kv[0])))
+            return {
+                "distance_cm": last_item.get("distance_cm"),
+                "level_pct": last_item.get("level_pct"),
+            }
+    except Exception:
+        pass
+
+    # Si no hay datos, devolvemos vacío (no rompe el merge)
+    return {}
+
+
+def merge_features(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Une los diccionarios de features dando prioridad a 'extra' (ESP32)
+    cuando existan claves en conflicto.
+    """
+    merged = dict(base or {})
+    for k, v in (extra or {}).items():
+        if v is not None:
+            merged[k] = v
+    return merged
+
+
+def run_model(features: Dict[str, Any]) -> Dict[str, Any]:
+    # Asegurar numéricos
+    df = pd.DataFrame([features]).apply(pd.to_numeric, errors="coerce")
+    # Reindex al orden y set de columnas esperado por el modelo
     X = df.reindex(columns=FEATURES)
-    proba = float(PIPE.predict_proba(X)[0,1])
+    proba = float(PIPE.predict_proba(X)[0, 1])
     label = int(proba >= THRESHOLD)
+    return {"risk_probability": proba, "risk_label": label, "threshold": THRESHOLD}
 
 
-    #Incluir features de ESP32
+# ---------------------- Endpoints ----------------------
+
+@app.get("/predict_realtime")
+def predict_realtime(
+    use_esp32: bool = Query(default=True, description="Si True, mezcla con últimos datos del ESP32"),
+    device_id: str = Query(default=DEVICE_ID, description="ID del dispositivo ESP32 en RTDB")
+):
+    data = fetch_visualcrossing_realtime()
+
+    # Selección de la hora actual o fallback a la primera
+    current_hour = get_current_hour_str()
+    today = data["days"][0]
+    hour_data = next((h for h in today.get("hours", []) if h.get("datetime") == current_hour),
+                     (today.get("hours") or [{}])[0])
+
+    # Payload meteo numérico para el modelo
+    weather_payload = build_weather_payload_from_hour(hour_data)
+
+    # Mezcla con ESP32 si se pide
+    esp32_payload = get_latest_esp32(device_id) if use_esp32 else {}
+    features = merge_features(weather_payload, esp32_payload)
+
+    # Predicción
+    out = run_model(features)
+
+    # Campos descriptivos no numéricos (para UI)
+    extras = {
+        "condition": hour_data.get("conditions"),
+        "description": hour_data.get("description"),
+    }
+
     return {
         "location": data.get("resolvedAddress"),
-        "datetime": today["datetime"] + " " + hour_data["datetime"],
-        "features": payload,
-        "risk_probability": proba,
-        "risk_label": label
+        "datetime": f'{today.get("datetime", "")} {hour_data.get("datetime", "")}',
+        "features": features,           # combinados
+        "esp32_used": bool(esp32_payload),
+        **extras,
+        **out
     }
 
-#15 DIAS
+
 @app.get("/predict_daily")
-def predict_daily():
-    url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/15.5645%2C-88.0286?unitGroup=metric&include=days&key=HHPMJQETSARBF4BUCVZMRPBH8&contentType=json"
-    res = requests.get(url)
-    res.raise_for_status()
-    data = res.json()
+def predict_daily(
+    use_esp32: bool = Query(default=True, description="Si True, mezcla cada día con últimos datos del ESP32"),
+    device_id: str = Query(default=DEVICE_ID, description="ID del dispositivo ESP32 en RTDB"),
+    days: int = Query(default=15, ge=1, le=15, description="Cantidad de días (máx. 15)")
+):
+    data = fetch_visualcrossing_daily()
 
+    esp32_payload = get_latest_esp32(device_id) if use_esp32 else {}
     results = []
-    for day in data.get("days", [])[:15]: 
-        payload = {
-            "temp": day.get("temp"),
-            "humidity": day.get("humidity"),
-            "precip": day.get("precip"),
-            "windspeed": day.get("windspeed"),
-            "windgust": day.get("windgust"),
-            "cloudcover": day.get("cloudcover"),
-            "visibility": day.get("visibility"),
-            "sealevelpressure": day.get("sealevelpressure"),
-            "solarradiation": day.get("solarradiation"),
-            "solarenergy": day.get("solarenergy"),
-            "dew": day.get("dew"),
-            "uvindex": day.get("uvindex"),
-            "precip_sum_3d": 0,  
-            "precip_max_3d": 0
-        }
 
-        # DataFrame para predicción
-        df = pd.DataFrame([payload]).apply(pd.to_numeric, errors="coerce")
-        X = df.reindex(columns=FEATURES)
-        proba = float(PIPE.predict_proba(X)[0,1])
-        label = int(proba >= THRESHOLD)
+    for day in (data.get("days", [])[:days]):
+        weather_payload = build_weather_payload_from_day(day)
+        features = merge_features(weather_payload, esp32_payload)
+        out = run_model(features)
 
         results.append({
             "date": day.get("datetime"),
             "location": data.get("resolvedAddress"),
-            "features": payload,
-            "risk_probability": proba,
-            "risk_label": label
+            "features": features,
+            "esp32_used": bool(esp32_payload),
+            **out
         })
 
     return {"daily_predictions": results}
@@ -130,11 +258,16 @@ def predict_daily():
 def health():
     return {"status": "ok", "threshold": THRESHOLD, "n_features": len(FEATURES)}
 
+
 @app.post("/predict")
 def predict(inp: WeatherInput):
-    df = pd.DataFrame([inp.payload]).apply(pd.to_numeric, errors="coerce")
-    X = df.reindex(columns=FEATURES)
-    proba = float(PIPE.predict_proba(X)[0,1])
-    label = int(proba >= THRESHOLD)
-    return {"risk_probability": proba, "risk_label": label, "threshold": THRESHOLD}
-
+    """
+    - Si el cliente manda payload puro (solo weather o ya combinado), se usa tal cual.
+    - Si use_esp32=True, se fusiona el payload de entrada con los últimos datos del ESP32
+      (los campos del ESP32 tienen prioridad).
+    """
+    base = dict(inp.payload or {})
+    esp = get_latest_esp32(inp.device_id) if inp.use_esp32 else {}
+    features = merge_features(base, esp)
+    out = run_model(features)
+    return {"features": features, "esp32_used": bool(esp), **out}
