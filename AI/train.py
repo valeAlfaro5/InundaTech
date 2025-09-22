@@ -7,7 +7,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score, average_precision_score, classification_report, confusion_matrix
+from sklearn.metrics import (
+    roc_auc_score,
+    average_precision_score,
+    classification_report,
+    confusion_matrix,
+    accuracy_score,
+    precision_score,
+)
 import joblib
 from typing import List, Tuple
 
@@ -117,22 +124,53 @@ def main():
     pipe = Pipeline([("pre", pre), ("clf", clf)])
     pipe.fit(X_train, y_train)
 
-    # Evaluación
+    # --------- Evaluación ---------
     proba = pipe.predict_proba(X_test)[:, 1]
     y_pred05 = (proba >= 0.5).astype(int)
+
+    # Métricas base
+    roc = float(roc_auc_score(y_test, proba))
+    ap  = float(average_precision_score(y_test, proba))
+    acc = float(accuracy_score(y_test, y_pred05))
+    ppv = float(precision_score(y_test, y_pred05, zero_division=0))  # precision (PPV)
+    n_test = int(len(y_test))
+    n_pred_pos = int(np.sum(y_pred05 == 1))
+
+    # Margen de error 95% (aprox. normal) para accuracy y precision
+    def moe_95(p: float, n: int) -> float:
+        if n <= 0:
+            return float("nan")
+        return 1.96 * float(np.sqrt(max(p * (1 - p), 0.0) / n))
+
+    acc_moe = moe_95(acc, n_test)
+    ppv_moe = moe_95(ppv, n_pred_pos) if n_pred_pos > 0 else float("nan")
+
+    y_report = classification_report(y_test, y_pred05, output_dict=True)
+    cm = confusion_matrix(y_test, y_pred05).tolist()
+
     metrics = {
-        "roc_auc": float(roc_auc_score(y_test, proba)),
-        "avg_precision": float(average_precision_score(y_test, proba)),
-        "confusion_matrix@0.5": confusion_matrix(y_test, y_pred05).tolist(),
-        "report@0.5": classification_report(y_test, y_pred05, output_dict=True),
+        "roc_auc": roc,
+        "avg_precision": ap,
+        "accuracy": acc,
+        "precision_pos": ppv,
+        "accuracy_moe_95": acc_moe,
+        "precision_pos_moe_95": ppv_moe,
+        "n_test": n_test,
+        "n_predicted_positive": n_pred_pos,
+        "confusion_matrix@0.5": cm,
+        "report@0.5": y_report,
         "suggested_threshold_mm": float(threshold),
         "water_columns_detected": water_cols
     }
 
     # Guardado
     joblib.dump(pipe, Path(args.out) / "model.pkl")
-    (Path(args.out) / "metrics.json").write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+    (Path(args.out) / "metrics.json").write_text(
+        json.dumps(metrics, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
 
+    # --------- Prints finales solicitados ---------
     print(f"[OK] Modelo guardado en {args.out}/model.pkl")
     print(f"[INFO] Métricas guardadas en {args.out}/metrics.json")
     print(f"[INFO] Umbral sugerido (etiqueta): {threshold:.2f} mm/día")
@@ -140,6 +178,18 @@ def main():
         print(f"[INFO] Columnas de nivel de agua detectadas: {water_cols}")
     else:
         print("[WARN] No se detectaron columnas de nivel de agua.")
+
+    # Precisión (accuracy) y margen de error 95%
+    print("\n=== Resumen de desempeño (test) ===")
+    print(f"Accuracy (precisión global): {acc:.4f}")
+    print(f"Margen de error 95% (accuracy): ±{acc_moe:.4f}  (n={n_test})")
+
+    # Precisión (PPV) y su margen de error 95% — solo si hubo predicciones positivas
+    if n_pred_pos > 0:
+        print(f"Precision (PPV, clase positiva): {ppv:.4f}")
+        print(f"Margen de error 95% (precision): ±{ppv_moe:.4f}  (n_pred_pos={n_pred_pos})")
+    else:
+        print("Precision (PPV): 0.0000  (sin predicciones positivas; no se puede estimar margen de error)")
 
 if __name__ == "__main__":
     main()

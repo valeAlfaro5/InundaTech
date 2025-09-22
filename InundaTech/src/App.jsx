@@ -6,6 +6,8 @@ import  AlertsPage from './pages/AlertsPage';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { RegisterForm } from './pages/RegisterForm';
 import History from './pages/History';
+import DashboardEi from './pages/DashboardEi';
+import HistoryEi from './pages/HistoryEi';
 
 
 function App() {
@@ -19,6 +21,8 @@ function App() {
             <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="/alertas" element={<AlertsPage/>}/>
             <Route path="/history" element={<History/>}/>
+            <Route path="/dashboardei" element={<DashboardEi/>}/>
+            <Route path="/historyei" element={<HistoryEi/>}/>
           </Route>
         </Routes>
       </Router>

@@ -1,6 +1,12 @@
 {
-  "roc_auc": 0.9699074074074074,
-  "avg_precision": 0.5714285714285714,
+  "roc_auc": 0.9675925925925926,
+  "avg_precision": 0.5666666666666667,
+  "accuracy": 0.9795918367346939,
+  "precision_pos": 0.0,
+  "accuracy_moe_95": 0.02285714285714287,
+  "precision_pos_moe_95": NaN,
+  "n_test": 147,
+  "n_predicted_positive": 0,
   "confusion_matrix@0.5": [
     [
       144,
@@ -40,8 +46,6 @@
   },
   "suggested_threshold_mm": 21.899249999999977,
   "water_columns_detected": [
-    "sealevelpressure",
-    "distance_cm",
-    "level_pct"
+    "sealevelpressure"
   ]
 }
