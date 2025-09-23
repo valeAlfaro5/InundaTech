@@ -1,4 +1,3 @@
-// backend/index.js
 import express from "express";
 import cors from "cors";
 import nodemailer from "nodemailer";
@@ -7,6 +6,7 @@ import dotenv from "dotenv";
 import twilio from "twilio";
 import fs from "fs";
 import path from "path";
+import fetch from "node-fetch"; 
 
 dotenv.config();
 
@@ -40,14 +40,16 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// 📲 Configuración Twilio
 const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
 const TWILIO_PHONE = process.env.TWILIO_PHONE;
 
 const users = [
-  { id: 1, email: "valeriasalfaro@gmail.com", phone: "+50497919841" },
-  { id: 2, email: "valeriaalfaro@unitec.edu", phone: "+50494189011" },
-  // { id: 3, email: "miguel.ardon@unitec.edu", phone: "" },
-  {id: 4, email: "jorgefpaz011@gmail.com", phone: ""}
+  //{ id: 1, email: "valeriasalfaro@gmail.com", phone: "+50497919841" },
+  //{ id: 2, email: "valeriaalfaro@unitec.edu", phone: "+50494189011" },
+  //{ id: 3, email: "miguel.ardon@unitec.edu", phone: "" },
+  // { id: 4, email: "jorgefpaz011@gmail.com", phone: "" },
+  { id: 5, email: "jfredyfernando@gmail.com", phone: "+50497097452" }
 ];
 
 app.post("/sendAlert", async (req, res) => {
@@ -70,7 +72,7 @@ app.post("/sendAlert", async (req, res) => {
     } else if (method === "sms") {
       await Promise.all(users.map(user =>
         client.messages.create({
-          body: `⚠️ InundaTech - ${title}\n${message}`,
+          body: `InundaTech - ${title}\n${message}`,
           from: TWILIO_PHONE,
           to: user.phone
         })
@@ -89,6 +91,21 @@ app.post("/sendAlert", async (req, res) => {
 
     saveAlert(alert);
 
+    try {
+      await fetch("http://localhost:4000/alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: "u1",      
+          level: severity,
+          message
+        })
+      });
+      console.log("✅ Alerta también guardada en blockchain");
+    } catch (err) {
+      console.error("❌ No se pudo guardar en blockchain:", err.message);
+    }
+
     res.json({ message: "Alerta enviada y guardada", alert });
   } catch (err) {
     console.error("Error enviando:", err);
@@ -102,5 +119,5 @@ app.get("/alerts", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log(`📡 Servidor de notificaciones corriendo en http://localhost:${port}`);
 });

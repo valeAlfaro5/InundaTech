@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 	"strings"
+	"time"
+
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -12,40 +13,36 @@ type SmartContract struct {
 	contractapi.Contract
 }
 
-// User estructura para usuarios
 type User struct {
-	DocType     string `json:"docType"`
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	Password    string `json:"password"`
-	Role        string `json:"role"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
-	LastLogin   string `json:"lastLogin"`
+	DocType   string `json:"docType"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Password  string `json:"password"`
+	Role      string `json:"role"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+	LastLogin string `json:"lastLogin"`
 }
 
-// Alert estructura para alertas
 type Alert struct {
-	DocType     string `json:"docType"`
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Message     string `json:"message"`
-	Severity    string `json:"severity"`
-	Method      string `json:"method"`
-	CreatedBy   string `json:"createdBy"`
-	Recipients  int    `json:"recipients"`
-	Timestamp   string `json:"timestamp"`
-	Status      string `json:"status"`
+	DocType    string `json:"docType"`
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Message    string `json:"message"`
+	Severity   string `json:"severity"`
+	Method     string `json:"method"`
+	CreatedBy  string `json:"createdBy"`
+	Recipients int    `json:"recipients"`
+	Timestamp  string `json:"timestamp"`
+	Status     string `json:"status"`
 }
 
-// ================== FUNCIONES DE USUARIOS ================== //
-
-func (s *SmartContract) CreateUser(ctx contractapi.TransactionContextInterface, 
+func (s *SmartContract) CreateUser(ctx contractapi.TransactionContextInterface,
 	userId, name, email, phone, password, role, status string) error {
-	
+
 	userJSON, err := ctx.GetStub().GetState(userId)
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
@@ -89,7 +86,7 @@ func (s *SmartContract) ReadUser(ctx contractapi.TransactionContextInterface, us
 
 func (s *SmartContract) GetUserByEmail(ctx contractapi.TransactionContextInterface, email string) (string, error) {
 	queryString := fmt.Sprintf(`{"selector":{"docType":"user","email":"%s"}}`, strings.ToLower(email))
-	
+
 	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute query: %v", err)
@@ -109,7 +106,7 @@ func (s *SmartContract) GetUserByEmail(ctx contractapi.TransactionContextInterfa
 
 func (s *SmartContract) GetAllUsers(ctx contractapi.TransactionContextInterface) (string, error) {
 	queryString := `{"selector":{"docType":"user"}}`
-	
+
 	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute query: %v", err)
@@ -167,9 +164,9 @@ func (s *SmartContract) UpdateUserLastLogin(ctx contractapi.TransactionContextIn
 
 // ================== FUNCIONES DE ALERTAS ================== //
 
-func (s *SmartContract) CreateAlert(ctx contractapi.TransactionContextInterface, 
+func (s *SmartContract) CreateAlert(ctx contractapi.TransactionContextInterface,
 	alertId, title, message, severity, method, createdBy string, recipients int) error {
-	
+
 	alert := Alert{
 		DocType:    "alert",
 		ID:         alertId,
@@ -193,7 +190,7 @@ func (s *SmartContract) CreateAlert(ctx contractapi.TransactionContextInterface,
 
 func (s *SmartContract) GetAllAlerts(ctx contractapi.TransactionContextInterface) (string, error) {
 	queryString := `{"selector":{"docType":"alert"}}`
-	
+
 	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute query: %v", err)
@@ -222,8 +219,6 @@ func (s *SmartContract) GetAllAlerts(ctx contractapi.TransactionContextInterface
 
 	return string(alertsJSON), nil
 }
-
-// ================== FUNCIONES DE COMPATIBILIDAD ================== //
 
 func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
 	return nil

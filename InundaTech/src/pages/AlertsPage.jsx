@@ -18,13 +18,20 @@ const AlertsPage = () => {
   const [alertHistory, setAlertHistory] = useState([]);
   const { toast } = useToast();
 
+  // 🔹 Obtener historial desde backend
   const fetchAlerts = async () => {
     try {
       const res = await fetch("http://localhost:3000/alerts");
+      if (!res.ok) throw new Error("Error en la API");
       const data = await res.json();
       setAlertHistory(data);
     } catch (err) {
       console.error("❌ Error cargando historial:", err);
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el historial de alertas",
+        variant: "destructive"
+      });
     }
   };
 
@@ -32,6 +39,7 @@ const AlertsPage = () => {
     fetchAlerts();
   }, []);
 
+  // 🔹 Enviar alerta al backend
   const handleSendAlert = async () => {
     if (!title.trim() || !message.trim()) {
       toast({
@@ -45,7 +53,9 @@ const AlertsPage = () => {
     setIsLoading(true);
 
     try {
-      const fullMessage = `${message}\n\nNivel de severidad: **${getSeverityText(severity)}**`;
+      const fullMessage = `${message}\n\nNivel de severidad: **${getSeverityText(
+        severity
+      )}**`;
 
       const response = await fetch("http://localhost:3000/sendAlert", {
         method: "POST",
@@ -56,10 +66,11 @@ const AlertsPage = () => {
       if (!response.ok) throw new Error("Error enviando alerta");
 
       toast({
-        title: "Alerta enviada",
+        title: "✅ Alerta enviada",
         description: `Notificación enviada por ${method.toLowerCase()}`
       });
 
+      // Reset
       setTitle("");
       setMessage("");
       setSeverity("medium");
@@ -78,6 +89,7 @@ const AlertsPage = () => {
     }
   };
 
+  // 🔹 Helpers para severidad
   const getSeverityColor = severity => {
     switch (severity) {
       case "low":
@@ -115,17 +127,20 @@ const AlertsPage = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Centro de Alertas</h1>
           <p className="text-gray-600">
-            Envía notificaciones por correo o SMS a la comunidad sobre el estado de inundaciones
+            Envía notificaciones por correo o SMS a la comunidad sobre el estado
+            de inundaciones
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Nueva alerta */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Send className="w-5 h-5" /> Nueva Alerta
           </h2>
           <div className="space-y-4">
+            {/* Título */}
             <div>
               <label className="block text-sm font-medium mb-1">Título</label>
               <input
@@ -137,8 +152,11 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Severidad */}
             <div>
-              <label className="block text-sm font-medium mb-1">Nivel de Severidad</label>
+              <label className="block text-sm font-medium mb-1">
+                Nivel de Severidad
+              </label>
               <select
                 value={severity}
                 onChange={e => setSeverity(e.target.value)}
@@ -151,6 +169,7 @@ const AlertsPage = () => {
               </select>
             </div>
 
+            {/* Mensaje */}
             <div>
               <label className="block text-sm font-medium mb-1">Mensaje</label>
               <textarea
@@ -162,6 +181,7 @@ const AlertsPage = () => {
               />
             </div>
 
+            {/* Método */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Método de Envío</label>
               <div className="flex items-center space-x-6">
@@ -189,6 +209,7 @@ const AlertsPage = () => {
               </div>
             </div>
 
+            {/* Botón */}
             <button
               onClick={handleSendAlert}
               disabled={isLoading || !title.trim() || !message.trim()}
@@ -209,6 +230,7 @@ const AlertsPage = () => {
           </div>
         </div>
 
+        {/* Historial */}
         <div className="border rounded-2xl bg-white shadow-sm p-4 hover:shadow-md transition">
           <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
             <Clock className="w-5 h-5" /> Historial de Alertas
@@ -221,29 +243,35 @@ const AlertsPage = () => {
             {alertHistory.length === 0 ? (
               <p className="text-gray-500 text-sm">No hay alertas registradas</p>
             ) : (
-              alertHistory.map(alert => (
+              alertHistory.map((alert, index) => (
                 <div
-                  key={alert.id}
+                  key={alert.id || index}
                   className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900">{alert.title}</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      {alert.title || "Sin título"}
+                    </h3>
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(
-                        alert.severity
+                        alert.severity || "medium"
                       )}`}
                     >
-                      {getSeverityText(alert.severity)}
+                      {getSeverityText(alert.severity || "medium")}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">{alert.message}</p>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {alert.message || "Sin mensaje"}
+                  </p>
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <div className="flex items-center gap-1">
                       <Users className="w-3 h-3" />
-                      {alert.recipients || "N/A"} usuarios
+                      {alert.recipients || 0} usuarios
                     </div>
                     <span>
-                      {new Date(alert.timestamp).toLocaleString("es-ES")}
+                      {alert.timestamp
+                        ? new Date(alert.timestamp).toLocaleString("es-ES")
+                        : "Sin fecha"}
                     </span>
                   </div>
                 </div>

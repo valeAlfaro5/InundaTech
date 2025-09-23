@@ -27,7 +27,7 @@ export const Dashboard = () => {
 
   useEffect(() => {
     fetchRisk();
-    const interval = setInterval(fetchRisk, 60000); // refresca cada 1 min
+    const interval = setInterval(fetchRisk, 60000); 
     return () => clearInterval(interval);
   }, []);
 
