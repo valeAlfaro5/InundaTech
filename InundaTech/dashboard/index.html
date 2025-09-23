@@ -1,0 +1,28 @@
+
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>InundaTech Dashboard</title></head>
+<body>
+<h1>InundaTech - Medidas y Alertas</h1>
+<div>
+  <label>User ID: <input id="userId" value="u1"></label>
+  <button onclick="load()">Cargar mediciones y alertas</button>
+</div>
+<h2>Mediciones</h2>
+<table border="1" id="measTable"><thead><tr><th>id</th><th>metric</th><th>value</th><th>unit</th><th>timestamp</th></tr></thead><tbody></tbody></table>
+<h2>Alertas</h2>
+<table border="1" id="alertTable"><thead><tr><th>id</th><th>level</th><th>message</th><th>timestamp</th></tr></thead><tbody></tbody></table>
+<script>
+async function load(){
+  const userId = document.getElementById('userId').value;
+  const base = location.origin.includes('http') ? location.origin : 'http://localhost:3000';
+  const meas = await fetch(base + '/measurements/' + userId).then(r=>r.json()).catch(()=>[]);
+  const alerts = await fetch(base + '/alerts/' + userId).then(r=>r.json()).catch(()=>[]);
+  const mt = document.querySelector('#measTable tbody'); mt.innerHTML='';
+  meas.forEach(m=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${m.measurementId}</td><td>${m.metric}</td><td>${m.value}</td><td>${m.unit}</td><td>${m.timestamp}</td>`; mt.appendChild(tr); });
+  const at = document.querySelector('#alertTable tbody'); at.innerHTML='';
+  alerts.forEach(a=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${a.alertId}</td><td>${a.level}</td><td>${a.message}</td><td>${a.timestamp}</td>`; at.appendChild(tr); });
+}
+</script>
+</body>
+</html>
